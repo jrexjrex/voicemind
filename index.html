@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiceMind — Think Out Loud</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --bg3: #1a1a26;
+    --purple: #6B5BF5;
+    --purple-light: #8b7ef8;
+    --gold: #F5C842;
+    --gold-light: #f9d96a;
+    --gold-dim: rgba(245,200,66,0.15);
+    --text: #e8e8f0;
+    --text-muted: #888899;
+    --border: rgba(255,255,255,0.08);
+    --radius: 16px;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ── Energy Screen ── */
+  #energy-screen {
+    position: fixed; inset: 0; z-index: 1000;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 48px; padding: 32px;
+    animation: fadeIn 0.6s ease;
+  }
+  #energy-screen.hidden { display: none; }
+
+  .energy-title {
+    text-align: center;
+  }
+  .energy-title h1 {
+    font-size: clamp(1.8rem, 5vw, 3rem);
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--gold), var(--purple-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .energy-title p {
+    color: var(--text-muted);
+    font-size: 1rem;
+    font-weight: 300;
+  }
+
+  .energy-buttons {
+    display: flex; flex-wrap: wrap;
+    gap: 20px; justify-content: center;
+  }
+
+  .energy-btn {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px;
+    width: 160px; height: 180px;
+    border: 1.5px solid var(--border);
+    border-radius: 24px;
+    background: var(--bg2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+    color: var(--text);
+    position: relative;
+    overflow: hidden;
+  }
+  .energy-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, var(--gold-dim), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .energy-btn:hover::before { opacity: 1; }
+  .energy-btn:hover {
+    border-color: var(--gold);
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 0 16px 40px rgba(245,200,66,0.2);
+  }
+  .energy-btn:active { transform: translateY(-2px) scale(1.01); }
+  .energy-btn .emoji { font-size: 3rem; }
+  .energy-btn .label { font-size: 1rem; font-weight: 600; }
+  .energy-btn .sub { font-size: 0.75rem; color: var(--text-muted); }
+
+  /* ── Main App ── */
+  #app {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 120px;
+    gap: 40px;
+  }
+
+  /* ── Header ── */
+  .app-header {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 6px;
+    width: 100%;
+  }
+  .logo {
+    font-size: 1.1rem; font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .energy-badge {
+    font-size: 0.8rem; color: var(--text-muted);
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .energy-badge:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ── Mic section ── */
+  .voice-section {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 24px;
+    width: 100%;
+  }
+
+  .voice-heading {
+    text-align: center;
+  }
+  .voice-heading h2 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .voice-heading p {
+    font-size: 0.9rem; color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  /* Mic button wrapper for pulse rings */
+  .mic-wrapper {
+    position: relative;
+    width: 160px; height: 160px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .pulse-ring {
+    position: absolute;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .mic-wrapper.recording .pulse-ring:nth-child(1) { animation: pulseRing 1.5s ease-out infinite; }
+  .mic-wrapper.recording .pulse-ring:nth-child(2) { animation: pulseRing 1.5s ease-out infinite 0.5s; }
+  .mic-wrapper.recording .pulse-ring:nth-child(3) { animation: pulseRing 1.5s ease-out infinite 1s; }
+
+  @keyframes pulseRing {
+    0%   { transform: scale(1); opacity: 0.7; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+
+  #mic-btn {
+    position: relative; z-index: 1;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem;
+    background: conic-gradient(from 0deg, var(--gold), var(--gold-light), #fffbe6, var(--gold-light), var(--gold));
+    box-shadow: 0 0 30px rgba(245,200,66,0.3), 0 0 60px rgba(245,200,66,0.1);
+    animation: shimmer 3s linear infinite;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #mic-btn:active, #mic-btn.active {
+    transform: scale(0.93);
+    box-shadow: 0 0 50px rgba(245,200,66,0.6), 0 0 100px rgba(245,200,66,0.2);
+    animation: shimmer 0.8s linear infinite;
+  }
+
+  @keyframes shimmer {
+    0%   { filter: brightness(1) saturate(1); }
+    50%  { filter: brightness(1.2) saturate(1.3); }
+    100% { filter: brightness(1) saturate(1); }
+  }
+
+  /* ── Live transcript ── */
+  #live-transcript {
+    min-height: 28px;
+    max-width: 500px; width: 100%;
+    text-align: center;
+    color: var(--gold-light);
+    font-size: 1rem; font-style: italic;
+    font-weight: 300;
+    opacity: 0.8;
+    padding: 0 16px;
+    transition: opacity 0.3s;
+  }
+
+  /* ── HTTPS banner ── */
+  #https-banner {
+    display: none;
+    background: rgba(245,200,66,0.1);
+    border: 1px solid rgba(245,200,66,0.3);
+    border-radius: 12px;
+    padding: 12px 20px;
+    max-width: 500px; width: 100%;
+    text-align: center;
+    font-size: 0.85rem; color: var(--gold);
+    line-height: 1.5;
+  }
+
+  /* ── Thought bubbles ── */
+  #thoughts-container {
+    display: flex; flex-direction: column;
+    gap: 12px; width: 100%; max-width: 600px;
+  }
+
+  .thought-bubble {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex; align-items: flex-start;
+    gap: 12px;
+    animation: bubbleIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+  }
+
+  @keyframes bubbleIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .thought-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+  .thought-text { flex: 1; font-size: 0.95rem; line-height: 1.5; }
+  .thought-delete {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 1.1rem;
+    opacity: 0.5; transition: opacity 0.2s;
+    flex-shrink: 0; padding: 2px;
+  }
+  .thought-delete:hover { opacity: 1; color: #ff6b6b; }
+
+  /* ── Create Calm Blocks button ── */
+  #create-blocks-btn {
+    display: none;
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: #0a0a0f;
+    border: none; border-radius: 50px;
+    padding: 18px 40px;
+    font-size: 1.1rem; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    box-shadow: 0 8px 30px rgba(245,200,66,0.35);
+    transition: all 0.3s ease;
+    animation: fadeIn 0.5s ease;
+  }
+  #create-blocks-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 40px rgba(245,200,66,0.5);
+  }
+  #create-blocks-btn:active { transform: translateY(0); }
+  #create-blocks-btn.visible { display: block; }
+
+  /* ── Task Board ── */
+  #task-board {
+    width: 100%; max-width: 600px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  .board-header {
+    font-size: 0.75rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--text-muted);
+    padding: 0 4px;
+  }
+
+  .task-block {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    cursor: grab;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    user-select: none;
+    animation: bubbleIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+    position: relative;
+  }
+  .task-block:hover { border-color: var(--purple); }
+  .task-block.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+  }
+  .task-block.drag-over {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px rgba(245,200,66,0.2);
+  }
+  .task-block.approved {
+    border-color: rgba(245,200,66,0.4);
+    background: linear-gradient(135deg, var(--bg2), rgba(245,200,66,0.04));
+  }
+
+  .task-block-top {
+    display: flex; align-items: flex-start;
+    gap: 12px; margin-bottom: 14px;
+  }
+  .task-drag-handle {
+    color: var(--text-muted); font-size: 1.1rem;
+    flex-shrink: 0; margin-top: 2px;
+    opacity: 0.4;
+  }
+  .task-text { flex: 1; font-size: 0.95rem; line-height: 1.55; }
+  .task-time-badge {
+    flex-shrink: 0;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 0.78rem; color: var(--text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .task-block-actions {
+    display: flex; align-items: center;
+    gap: 8px; flex-wrap: wrap;
+  }
+
+  .btn-approve {
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: #0a0a0f;
+    border: none; border-radius: 20px;
+    padding: 8px 18px;
+    font-size: 0.85rem; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-approve:hover { box-shadow: 0 4px 16px rgba(245,200,66,0.4); }
+  .btn-approve.approved-state {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    cursor: default;
+  }
+
+  .btn-shift {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 0.82rem; color: var(--text-muted);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-shift:hover { border-color: var(--purple); color: var(--text); }
+
+  .task-scheduled-time {
+    margin-left: auto;
+    font-size: 0.8rem; color: var(--purple-light);
+    font-weight: 500;
+  }
+
+  /* ── Reminder Modal ── */
+  #reminder-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(10,10,15,0.88);
+    backdrop-filter: blur(12px);
+    align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  #reminder-modal.visible { display: flex; animation: fadeIn 0.3s ease; }
+
+  .modal-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 36px 32px;
+    max-width: 420px; width: 100%;
+    text-align: center;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+  }
+  .modal-icon { font-size: 3rem; margin-bottom: 16px; }
+  .modal-title {
+    font-size: 1.25rem; font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .modal-task-text {
+    font-size: 1rem; color: var(--gold);
+    font-style: italic; margin-bottom: 28px;
+    line-height: 1.5;
+  }
+
+  .modal-actions {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  .btn-dismiss {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text-muted);
+    font-size: 0.95rem; font-family: inherit;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-dismiss:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+  .btn-snooze {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text);
+    font-size: 0.95rem; font-family: inherit;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-snooze:hover { border-color: var(--purple); }
+
+  .btn-reschedule {
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: #0a0a0f;
+    border: none; border-radius: 12px;
+    padding: 14px;
+    font-size: 0.95rem; font-weight: 700; font-family: inherit;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-reschedule:hover { box-shadow: 0 4px 20px rgba(245,200,66,0.4); }
+
+  /* ── Personal Reminder Recorder ── */
+  #personal-reminder-section {
+    display: none;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  #personal-reminder-section.visible { display: block; }
+  .pr-title {
+    font-size: 0.9rem; color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  #pr-mic-btn {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    background: var(--gold-dim);
+    cursor: pointer;
+    font-size: 2rem;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+    transition: all 0.2s;
+    color: var(--gold);
+  }
+  #pr-mic-btn:hover { background: rgba(245,200,66,0.25); }
+  #pr-mic-btn.recording-pr {
+    background: rgba(245,200,66,0.3);
+    box-shadow: 0 0 0 6px rgba(245,200,66,0.1), 0 0 0 12px rgba(245,200,66,0.05);
+    animation: prPulse 1s ease-in-out infinite;
+  }
+  @keyframes prPulse {
+    0%, 100% { box-shadow: 0 0 0 6px rgba(245,200,66,0.1), 0 0 0 12px rgba(245,200,66,0.05); }
+    50% { box-shadow: 0 0 0 10px rgba(245,200,66,0.15), 0 0 0 20px rgba(245,200,66,0.05); }
+  }
+
+  #pr-status { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; }
+
+  #pr-audio-controls { display: none; margin-bottom: 12px; }
+  #pr-audio-controls.visible { display: block; }
+
+  #pr-audio-player { width: 100%; margin-bottom: 10px; }
+
+  .pr-save-discard {
+    display: flex; gap: 10px; justify-content: center;
+  }
+
+  .btn-pr-save {
+    background: var(--gold);
+    color: #0a0a0f;
+    border: none; border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.88rem; font-weight: 700; font-family: inherit;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-pr-discard {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.88rem; color: var(--text-muted); font-family: inherit;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-pr-discard:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+  /* ── Utilities ── */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .section-label {
+    width: 100%; max-width: 600px;
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: -8px;
+  }
+  .section-label span {
+    font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-muted); white-space: nowrap;
+  }
+  .section-label hr {
+    flex: 1; border: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .ghost-placeholder {
+    background: transparent;
+    border: 2px dashed var(--gold);
+    border-radius: var(--radius);
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* ── Empty state ── */
+  .empty-hint {
+    text-align: center; color: var(--text-muted);
+    font-size: 0.9rem; padding: 20px;
+    font-weight: 300; letter-spacing: 0.01em;
+  }
+
+  /* ── Approved checkmark badge ── */
+  .approved-badge {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--gold);
+    color: #0a0a0f;
+    border-radius: 50%;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 800;
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 480px) {
+    .energy-btn { width: 130px; height: 155px; }
+    .modal-card { padding: 28px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════ -->
+<!--  ENERGY SCREEN                         -->
+<!-- ══════════════════════════════════════ -->
+<div id="energy-screen">
+  <div class="energy-title">
+    <h1>VoiceMind</h1>
+    <p>How's your energy right now?</p>
+  </div>
+  <div class="energy-buttons">
+    <button class="energy-btn" data-energy="low" onclick="setEnergy('low')">
+      <span class="emoji">🌑</span>
+      <span class="label">Low</span>
+      <span class="sub">Take it slow</span>
+    </button>
+    <button class="energy-btn" data-energy="neutral" onclick="setEnergy('neutral')">
+      <span class="emoji">🌤</span>
+      <span class="label">Neutral</span>
+      <span class="sub">Steady flow</span>
+    </button>
+    <button class="energy-btn" data-energy="charged" onclick="setEnergy('charged')">
+      <span class="emoji">⚡</span>
+      <span class="label">Charged</span>
+      <span class="sub">Full power</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  MAIN APP                             -->
+<!-- ══════════════════════════════════════ -->
+<div id="app" style="display:none">
+
+  <!-- Header -->
+  <div class="app-header">
+    <div class="logo">VoiceMind</div>
+    <div class="energy-badge" id="energy-badge" onclick="resetEnergy()">
+      <span id="energy-badge-text"></span> · tap to change
+    </div>
+  </div>
+
+  <!-- HTTPS warning -->
+  <div id="https-banner">
+    ⚠️ Microphone access requires HTTPS or localhost.<br>
+    Open this file via a local server or save to your desktop and use Chrome's <code>--allow-file-access-from-files</code> flag.
+    Your typed text still works — or use Chrome's address bar with <strong>file://</strong>.
+  </div>
+
+  <!-- Voice Section -->
+  <div class="voice-section">
+    <div class="voice-heading">
+      <h2>What's on your mind?</h2>
+      <p>Hold to speak, release when done.</p>
+    </div>
+
+    <div class="mic-wrapper" id="mic-wrapper">
+      <div class="pulse-ring"></div>
+      <div class="pulse-ring"></div>
+      <div class="pulse-ring"></div>
+      <button id="mic-btn" aria-label="Hold to record">🎙️</button>
+    </div>
+
+    <div id="live-transcript"></div>
+  </div>
+
+  <!-- Thoughts -->
+  <div id="thoughts-container"></div>
+
+  <!-- Create Blocks -->
+  <button id="create-blocks-btn" onclick="createCalmBlocks()">Create Calm Blocks ✦</button>
+
+  <!-- Task Board -->
+  <div id="task-board-wrapper" style="display:none; width:100%; max-width:600px">
+    <div class="section-label">
+      <span>Calm Blocks</span><hr>
+    </div>
+    <div id="task-board"></div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  REMINDER MODAL                        -->
+<!-- ══════════════════════════════════════ -->
+<div id="reminder-modal">
+  <div class="modal-card">
+    <div class="modal-icon">🔔</div>
+    <div class="modal-title">Gentle Nudge</div>
+    <div class="modal-task-text" id="modal-task-text"></div>
+    <div class="modal-actions">
+      <button class="btn-reschedule" onclick="handleModalAction('reschedule')">⏱ Reschedule</button>
+      <button class="btn-snooze"     onclick="handleModalAction('snooze')">💤 Snooze 15 min</button>
+      <button class="btn-dismiss"    onclick="handleModalAction('dismiss')">✕ Dismiss</button>
+    </div>
+
+    <!-- Personal Reminder -->
+    <div id="personal-reminder-section">
+      <div class="pr-title">Record a personal reminder 🎤</div>
+      <button id="pr-mic-btn" onclick="togglePRRecording()">🎙️</button>
+      <div id="pr-status">Tap to record</div>
+      <div id="pr-audio-controls">
+        <audio id="pr-audio-player" controls></audio>
+        <div class="pr-save-discard">
+          <button class="btn-pr-save"    onclick="savePR()">Save</button>
+          <button class="btn-pr-discard" onclick="discardPR()">Discard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  JAVASCRIPT                           -->
+<!-- ══════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────
+let energyLevel = null;
+let thoughts = [];          // [{id, text}]
+let taskBlocks = [];        // [{id, text, minutes, scheduledAt, approved}]
+let reminderTimers = {};    // taskId -> {loopFn, intervalId}
+let currentReminderTask = null;
+
+let recognition = null;
+let isRecording = false;
+let currentTranscript = '';
+
+let audioCtx = null;
+let prMediaRecorder = null;
+let prChunks = [];
+let prBlob = null;
+let prRecording = false;
+
+let dragSrcEl = null;
+let ghostEl = null;
+
+// ── Init ───────────────────────────────────────────────
+(function init() {
+  const saved = sessionStorage.getItem('vm_energy');
+  if (saved) {
+    energyLevel = saved;
+    showApp();
+  }
+  setupSpeechRecognition();
+  setupMicButton();
+  requestNotificationPermission();
+})();
+
+// ── Energy ─────────────────────────────────────────────
+function setEnergy(level) {
+  energyLevel = level;
+  sessionStorage.setItem('vm_energy', level);
+  document.getElementById('energy-screen').classList.add('hidden');
+  showApp();
+}
+
+function showApp() {
+  document.getElementById('app').style.display = 'flex';
+  const labels = { low: '🌑 Low', neutral: '🌤 Neutral', charged: '⚡ Charged' };
+  document.getElementById('energy-badge-text').textContent = labels[energyLevel] || energyLevel;
+}
+
+function resetEnergy() {
+  sessionStorage.removeItem('vm_energy');
+  energyLevel = null;
+  document.getElementById('energy-screen').classList.remove('hidden');
+  document.getElementById('app').style.display = 'none';
+}
+
+// ── Speech Recognition ─────────────────────────────────
+function setupSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    document.getElementById('https-banner').style.display = 'block';
+    document.getElementById('https-banner').innerHTML =
+      '⚠️ Your browser does not support the Web Speech API. Please use Chrome.';
+    return;
+  }
+
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (e) => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        final += e.results[i][0].transcript;
+      } else {
+        interim += e.results[i][0].transcript;
+      }
+    }
+    currentTranscript = (currentTranscript + final).trim();
+    document.getElementById('live-transcript').textContent =
+      currentTranscript + (interim ? ' ' + interim : '');
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      document.getElementById('https-banner').style.display = 'block';
+    }
+    stopRecording(false);
+  };
+
+  recognition.onend = () => {
+    if (isRecording) {
+      try { recognition.start(); } catch(ex) {}
+    }
+  };
+}
+
+// ── Mic Button ─────────────────────────────────────────
+function setupMicButton() {
+  const btn = document.getElementById('mic-btn');
+  const wrapper = document.getElementById('mic-wrapper');
+
+  function startRec(e) {
+    e.preventDefault();
+    if (isRecording) return;
+    isRecording = true;
+    currentTranscript = '';
+    document.getElementById('live-transcript').textContent = '';
+    btn.classList.add('active');
+    wrapper.classList.add('recording');
+    if (recognition) {
+      try { recognition.start(); } catch(ex) {}
+    }
+  }
+
+  function stopRec(e) {
+    if (e) e.preventDefault();
+    if (!isRecording) return;
+    stopRecording(true);
+  }
+
+  btn.addEventListener('mousedown',  startRec);
+  btn.addEventListener('touchstart', startRec, { passive: false });
+  btn.addEventListener('mouseup',    stopRec);
+  btn.addEventListener('touchend',   stopRec);
+  btn.addEventListener('mouseleave', stopRec);
+
+  // Prevent context menu on long press mobile
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function stopRecording(save) {
+  isRecording = false;
+  const btn = document.getElementById('mic-btn');
+  const wrapper = document.getElementById('mic-wrapper');
+  btn.classList.remove('active');
+  wrapper.classList.remove('recording');
+
+  if (recognition) {
+    try { recognition.stop(); } catch(ex) {}
+  }
+
+  const text = currentTranscript.trim();
+  if (save && text) {
+    addThought(text);
+  }
+  currentTranscript = '';
+  setTimeout(() => {
+    document.getElementById('live-transcript').textContent = '';
+  }, 400);
+}
+
+// ── Thoughts ───────────────────────────────────────────
+function addThought(text) {
+  const id = 'th_' + Date.now();
+  thoughts.push({ id, text });
+  renderThought({ id, text });
+  updateCreateButton();
+}
+
+function renderThought(thought) {
+  const container = document.getElementById('thoughts-container');
+  const el = document.createElement('div');
+  el.className = 'thought-bubble';
+  el.dataset.id = thought.id;
+  el.innerHTML = `
+    <span class="thought-icon">💭</span>
+    <span class="thought-text">${escHtml(thought.text)}</span>
+    <button class="thought-delete" onclick="deleteThought('${thought.id}')" title="Remove">✕</button>
+  `;
+  container.appendChild(el);
+}
+
+function deleteThought(id) {
+  thoughts = thoughts.filter(t => t.id !== id);
+  const el = document.querySelector(`.thought-bubble[data-id="${id}"]`);
+  if (el) el.remove();
+  updateCreateButton();
+}
+
+function updateCreateButton() {
+  const btn = document.getElementById('create-blocks-btn');
+  if (thoughts.length > 0) {
+    btn.classList.add('visible');
+  } else {
+    btn.classList.remove('visible');
+  }
+}
+
+// ── Task Block Transformation ───────────────────────────
+const HARD_KEYWORDS = ['plan','strategy','write','design','create','build','develop','analyze','research','think','solve','decide','review','prepare','organize','complex','difficult'];
+const MEDIUM_KEYWORDS = ['call','email','send','reply','check','update','edit','fix','schedule','meet','discuss','coordinate','follow'];
+
+function estimateMinutes(text) {
+  const lower = text.toLowerCase();
+  const hardCount = HARD_KEYWORDS.filter(k => lower.includes(k)).length;
+  const medCount  = MEDIUM_KEYWORDS.filter(k => lower.includes(k)).length;
+  const words = text.split(/\s+/).length;
+
+  if (hardCount >= 2 || words > 30) return 60;
+  if (hardCount >= 1 || words > 20) return 45;
+  if (medCount >= 1 || words > 10) return 30;
+  return 15;
+}
+
+function splitIntoActions(text) {
+  // Split on conjunctions / punctuation for multiple actionable pieces
+  const sentences = text
+    .replace(/\band\b/gi, '|')
+    .replace(/[.!?]+/g, '|')
+    .split('|')
+    .map(s => s.trim())
+    .filter(s => s.length > 3);
+
+  if (sentences.length === 0) return [text];
+  if (sentences.length <= 3) return sentences;
+  return sentences.slice(0, 3);
+}
+
+function createCalmBlocks() {
+  if (thoughts.length === 0) return;
+
+  taskBlocks = [];
+
+  thoughts.forEach(thought => {
+    const actions = splitIntoActions(thought.text);
+    actions.forEach(action => {
+      // Capitalize first letter
+      const cleaned = action.charAt(0).toUpperCase() + action.slice(1);
+      taskBlocks.push({
+        id: 'tb_' + Math.random().toString(36).slice(2),
+        text: cleaned,
+        minutes: estimateMinutes(action),
+        scheduledAt: null,
+        approved: false
+      });
+    });
+  });
+
+  // Sort based on energy
+  if (energyLevel === 'low') {
+    taskBlocks.sort((a, b) => a.minutes - b.minutes);
+  } else if (energyLevel === 'charged') {
+    taskBlocks.sort((a, b) => b.minutes - a.minutes);
+  }
+  // neutral: keep original order
+
+  // Assign scheduled times (starting from 15 min from now)
+  let cursor = Date.now() + 15 * 60000;
+  taskBlocks.forEach(block => {
+    block.scheduledAt = cursor;
+    cursor += block.minutes * 60000;
+  });
+
+  renderTaskBoard();
+
+  // Hide thoughts + button after organizing
+  document.getElementById('thoughts-container').style.display = 'none';
+  document.getElementById('create-blocks-btn').style.display = 'none';
+}
+
+// ── Task Board Render ──────────────────────────────────
+function renderTaskBoard() {
+  const wrapper = document.getElementById('task-board-wrapper');
+  const board = document.getElementById('task-board');
+  wrapper.style.display = 'block';
+  board.innerHTML = '';
+
+  if (taskBlocks.length === 0) {
+    board.innerHTML = '<div class="empty-hint">No blocks yet. Speak your thoughts first.</div>';
+    return;
+  }
+
+  taskBlocks.forEach((block, idx) => {
+    board.appendChild(createBlockEl(block, idx));
+  });
+
+  setupDragAndDrop();
+}
+
+function createBlockEl(block, idx) {
+  const el = document.createElement('div');
+  el.className = 'task-block' + (block.approved ? ' approved' : '');
+  el.dataset.id = block.id;
+  el.draggable = true;
+
+  const timeStr = fmtTime(block.scheduledAt);
+  const minLabel = block.minutes + ' min';
+
+  el.innerHTML = `
+    ${block.approved ? '<div class="approved-badge">✓</div>' : ''}
+    <div class="task-block-top">
+      <div class="task-drag-handle">⠿</div>
+      <div class="task-text">${escHtml(block.text)}</div>
+      <div class="task-time-badge">⏱ ${minLabel}</div>
+    </div>
+    <div class="task-block-actions">
+      <button class="btn-approve ${block.approved ? 'approved-state' : ''}"
+        onclick="approveBlock('${block.id}')" ${block.approved ? 'disabled' : ''}>
+        ${block.approved ? '✓ Approved' : '✓ Approve'}
+      </button>
+      <button class="btn-shift" onclick="shiftBlock('${block.id}', -30)">← Earlier</button>
+      <button class="btn-shift" onclick="shiftBlock('${block.id}', 30)">Later →</button>
+      <span class="task-scheduled-time">${timeStr}</span>
+    </div>
+  `;
+  return el;
+}
+
+function approveBlock(id) {
+  const block = taskBlocks.find(b => b.id === id);
+  if (!block || block.approved) return;
+  block.approved = true;
+  scheduleReminder(block);
+  renderTaskBoard();
+}
+
+function shiftBlock(id, deltaMins) {
+  const block = taskBlocks.find(b => b.id === id);
+  if (!block) return;
+  block.scheduledAt += deltaMins * 60000;
+
+  // Update just the time display without full re-render
+  const el = document.querySelector(`.task-block[data-id="${id}"]`);
+  if (el) {
+    const timeEl = el.querySelector('.task-scheduled-time');
+    if (timeEl) timeEl.textContent = fmtTime(block.scheduledAt);
+  }
+
+  // Reschedule if approved
+  if (block.approved) {
+    clearReminderFor(id);
+    scheduleReminder(block);
+  }
+}
+
+// ── Drag and Drop (pure JS) ────────────────────────────
+function setupDragAndDrop() {
+  const board = document.getElementById('task-board');
+  let draggingEl = null;
+  let ghostHeight = 0;
+
+  board.querySelectorAll('.task-block').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      draggingEl = el;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+
+      ghostHeight = el.offsetHeight;
+
+      // Create ghost placeholder
+      ghostEl = document.createElement('div');
+      ghostEl.className = 'task-block ghost-placeholder';
+      ghostEl.style.height = ghostHeight + 'px';
+      ghostEl.style.marginBottom = '12px';
+    });
+
+    el.addEventListener('dragend', () => {
+      if (draggingEl) draggingEl.classList.remove('dragging');
+      if (ghostEl && ghostEl.parentNode) {
+        ghostEl.parentNode.replaceChild(draggingEl, ghostEl);
+      }
+      ghostEl = null;
+      draggingEl = null;
+      board.querySelectorAll('.task-block').forEach(b => b.classList.remove('drag-over'));
+
+      // Re-sync taskBlocks order from DOM
+      const newOrder = [];
+      board.querySelectorAll('.task-block[data-id]').forEach(b => {
+        const found = taskBlocks.find(t => t.id === b.dataset.id);
+        if (found) newOrder.push(found);
+      });
+      taskBlocks = newOrder;
+
+      // Re-assign scheduled times in new order
+      let cursor = Date.now() + 15 * 60000;
+      taskBlocks.forEach(block => {
+        block.scheduledAt = cursor;
+        cursor += block.minutes * 60000;
+      });
+      renderTaskBoard();
+    });
+
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!draggingEl || el === draggingEl || el === ghostEl) return;
+      e.dataTransfer.dropEffect = 'move';
+
+      const rect = el.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if (e.clientY < midY) {
+        board.insertBefore(ghostEl, el);
+      } else {
+        board.insertBefore(ghostEl, el.nextSibling);
+      }
+    });
+  });
+}
+
+// ── Reminders ──────────────────────────────────────────
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function scheduleReminder(block) {
+  const delay = block.scheduledAt - Date.now();
+  if (delay < 0) return;
+
+  const timerId = setTimeout(() => {
+    fireReminder(block);
+  }, delay);
+
+  reminderTimers[block.id] = { timerId, loopInterval: null };
+}
+
+function clearReminderFor(id) {
+  if (reminderTimers[id]) {
+    clearTimeout(reminderTimers[id].timerId);
+    clearInterval(reminderTimers[id].loopInterval);
+    delete reminderTimers[id];
+  }
+}
+
+function fireReminder(block) {
+  currentReminderTask = block;
+  showReminderModal(block);
+
+  // Loop chime + TTS every 90 seconds
+  playChimeThenSpeak(block.text);
+
+  const loopInterval = setInterval(() => {
+    if (document.getElementById('reminder-modal').classList.contains('visible')) {
+      playChimeThenSpeak(block.text);
+    } else {
+      clearInterval(loopInterval);
+    }
+  }, 90000);
+
+  if (reminderTimers[block.id]) {
+    reminderTimers[block.id].loopInterval = loopInterval;
+  }
+
+  // Browser notification
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('VoiceMind 🔔', {
+      body: block.text,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="28" font-size="28">🔔</text></svg>'
+    });
+  }
+}
+
+// ── Web Audio Chime ────────────────────────────────────
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playChimeThenSpeak(taskText) {
+  try {
+    const ctx = getAudioCtx();
+    const freqs = [528, 660, 792];
+    const masterGain = ctx.createGain();
+    masterGain.connect(ctx.destination);
+    masterGain.gain.setValueAtTime(0.18, ctx.currentTime);
+    masterGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.connect(masterGain);
+      osc.start(ctx.currentTime + i * 0.08);
+      osc.stop(ctx.currentTime + 1.6);
+    });
+
+    setTimeout(() => speakReminder(taskText), 1600);
+  } catch(e) {
+    speakReminder(taskText);
+  }
+}
+
+// ── Speech Synthesis ───────────────────────────────────
+function speakReminder(taskText) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(
+    `Hey, just a gentle nudge — ${taskText} is up next. You've got this.`
+  );
+  utterance.rate  = 0.88;
+  utterance.pitch = 1.05;
+  utterance.volume = 0.9;
+
+  // Try to get a warm voice
+  const voices = window.speechSynthesis.getVoices();
+  const warm = voices.find(v => /samantha|karen|victoria|female|woman/i.test(v.name))
+            || voices.find(v => v.lang.startsWith('en'));
+  if (warm) utterance.voice = warm;
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// ── Reminder Modal ─────────────────────────────────────
+function showReminderModal(block) {
+  document.getElementById('modal-task-text').textContent = block.text;
+  document.getElementById('reminder-modal').classList.add('visible');
+  document.getElementById('personal-reminder-section').classList.remove('visible');
+  document.getElementById('pr-audio-controls').classList.remove('visible');
+  document.getElementById('pr-status').textContent = 'Tap to record';
+  prBlob = null;
+}
+
+function handleModalAction(action) {
+  const modal = document.getElementById('reminder-modal');
+  const block = currentReminderTask;
+
+  // Stop loop
+  if (block && reminderTimers[block.id]) {
+    clearInterval(reminderTimers[block.id].loopInterval);
+  }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+
+  if (action === 'dismiss') {
+    modal.classList.remove('visible');
+    if (block) {
+      block.approved = false;
+      renderTaskBoard();
+    }
+  } else if (action === 'snooze') {
+    modal.classList.remove('visible');
+    if (block) {
+      block.scheduledAt = Date.now() + 15 * 60000;
+      scheduleReminder(block);
+    }
+  } else if (action === 'reschedule') {
+    modal.classList.remove('visible');
+    if (block) {
+      block.scheduledAt = Date.now() + 60 * 60000;
+      scheduleReminder(block);
+      renderTaskBoard();
+    }
+  }
+
+  // Offer personal reminder recording
+  document.getElementById('personal-reminder-section').classList.add('visible');
+}
+
+// ── Personal Reminder Recorder ─────────────────────────
+function togglePRRecording() {
+  if (!prRecording) {
+    startPRRecording();
+  } else {
+    stopPRRecording();
+  }
+}
+
+function startPRRecording() {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    prChunks = [];
+    prMediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    prMediaRecorder.ondataavailable = e => { if (e.data.size > 0) prChunks.push(e.data); };
+    prMediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      prBlob = new Blob(prChunks, { type: 'audio/webm' });
+      const url = URL.createObjectURL(prBlob);
+      document.getElementById('pr-audio-player').src = url;
+      document.getElementById('pr-audio-controls').classList.add('visible');
+      document.getElementById('pr-status').textContent = 'Tap play to preview';
+    };
+    prMediaRecorder.start();
+    prRecording = true;
+    document.getElementById('pr-mic-btn').classList.add('recording-pr');
+    document.getElementById('pr-status').textContent = 'Recording… tap to stop';
+  }).catch(() => {
+    document.getElementById('pr-status').textContent = 'Mic access denied';
+  });
+}
+
+function stopPRRecording() {
+  if (prMediaRecorder && prMediaRecorder.state !== 'inactive') {
+    prMediaRecorder.stop();
+  }
+  prRecording = false;
+  document.getElementById('pr-mic-btn').classList.remove('recording-pr');
+}
+
+function savePR() {
+  if (!prBlob) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const key = 'vm_personal_reminder_' + (currentReminderTask ? currentReminderTask.id : Date.now());
+    localStorage.setItem(key, reader.result);
+    document.getElementById('pr-status').textContent = '✓ Saved to device';
+    document.getElementById('pr-audio-controls').classList.remove('visible');
+  };
+  reader.readAsDataURL(prBlob);
+}
+
+function discardPR() {
+  prBlob = null;
+  document.getElementById('pr-audio-controls').classList.remove('visible');
+  document.getElementById('pr-status').textContent = 'Discarded. Tap to try again.';
+}
+
+// ── Utilities ──────────────────────────────────────────
+function escHtml(str) {
+  return str
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Keyboard shortcut: Space to toggle recording
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    if (!isRecording) {
+      document.getElementById('mic-btn').dispatchEvent(new MouseEvent('mousedown'));
+    }
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    if (isRecording) {
+      document.getElementById('mic-btn').dispatchEvent(new MouseEvent('mouseup'));
+    }
+  }
+});
+
+// Load voices when ready (async in some browsers)
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices(); // warm up
+  };
+}
+</script>
+</body>
+</html>
