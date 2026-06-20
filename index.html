@@ -3,8 +3,8 @@
 <head>
   <meta name="viewport" content="width=393, initial-scale=1, minimum-scale=1, maximum-scale=1">
 <meta charset="UTF-8">
-<title>VoiceMind — Think Out Loud</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>VoiceMind — JARVIS Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 /* === Canonical convos-page CSS — runtime-injected === */
 /* convos-page — outermost frame.
@@ -636,18 +636,24 @@ html[data-convos-surface="small"] convos-page {
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #0a0a0f;
-    --bg2: #12121a;
-    --bg3: #1a1a26;
-    --purple: #6B5BF5;
-    --purple-light: #8b7ef8;
-    --gold: #F5C842;
+    --bg:         #0a0a0f;
+    --bg2:        #10101a;
+    --bg3:        #181828;
+    --bg4:        #1e1e32;
+    --navy:       #1a3a5c;
+    --cyan:       #00d4ff;
+    --cyan-dim:   rgba(0,212,255,0.12);
+    --cyan-glow:  rgba(0,212,255,0.35);
+    --gold:       #F5C842;
     --gold-light: #f9d96a;
-    --gold-dim: rgba(245,200,66,0.15);
-    --text: #e8e8f0;
-    --text-muted: #888899;
-    --border: rgba(255,255,255,0.08);
-    --radius: 16px;
+    --gold-dim:   rgba(245,200,66,0.15);
+    --gold-glow:  rgba(245,200,66,0.4);
+    --text:       #e8e8f0;
+    --text-muted: #7a7a99;
+    --border:     rgba(255,255,255,0.07);
+    --border-c:   rgba(0,212,255,0.2);
+    --radius:     14px;
+    --mono:       'JetBrains Mono', monospace;
   }
 
   html, body {
@@ -658,9 +664,44 @@ html[data-convos-surface="small"] convos-page {
     overflow-x: hidden;
   }
 
+  body.recording-active {
+    animation: edgePulse 1.8s ease-in-out infinite;
+  }
+  @keyframes edgePulse {
+    0%,100% { box-shadow: inset 0 0 0 0 transparent; }
+    50%      { box-shadow: inset 0 0 60px 8px rgba(0,212,255,0.18); }
+  }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ── Arc Reactor Icon ── */
+  .arc-reactor {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--cyan);
+    text-shadow: 0 0 10px var(--cyan), 0 0 22px rgba(0,212,255,0.4);
+    filter: drop-shadow(0 0 4px var(--cyan));
+    user-select: none;
+  }
+  .arc-reactor.glow-gold {
+    color: var(--gold);
+    text-shadow: 0 0 10px var(--gold), 0 0 22px rgba(245,200,66,0.4);
+    filter: drop-shadow(0 0 4px var(--gold));
+  }
+  .arc-reactor.large {
+    font-size: 2.2rem;
+  }
+  .arc-reactor.pulse {
+    animation: reactorPulse 3s ease-in-out infinite;
+  }
+  @keyframes reactorPulse {
+    0%,100% { text-shadow: 0 0 8px var(--cyan), 0 0 18px rgba(0,212,255,0.3); }
+    50%      { text-shadow: 0 0 18px var(--cyan), 0 0 40px rgba(0,212,255,0.6), 0 0 60px rgba(0,212,255,0.2); }
+  }
 
   /* ── Energy Screen ── */
   #energy-screen {
@@ -668,402 +709,532 @@ html[data-convos-surface="small"] convos-page {
     background: var(--bg);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 48px; padding: 32px;
+    gap: 40px; padding: 32px;
     animation: fadeIn 0.6s ease;
   }
   #energy-screen.hidden { display: none; }
 
   .energy-title { text-align: center; }
+  .energy-title .logo-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin-bottom: 14px;
+  }
   .energy-title h1 {
-    font-size: clamp(1.8rem, 5vw, 3rem);
+    font-size: clamp(1.6rem, 5vw, 2.6rem);
     font-weight: 700;
-    background: linear-gradient(135deg, var(--gold), var(--purple-light));
+    background: linear-gradient(135deg, var(--gold), var(--cyan));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 8px;
+    letter-spacing: 0.08em;
   }
-  .energy-title p { color: var(--text-muted); font-size: 1rem; font-weight: 300; }
+  .energy-title p { color: var(--text-muted); font-size: 0.95rem; font-weight: 300; font-family: var(--mono); }
 
-  .energy-buttons { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+  .energy-buttons { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
 
   .energy-btn {
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 12px;
-    width: 160px; height: 180px;
-    border: 1.5px solid var(--border);
-    border-radius: 24px;
+    gap: 10px;
+    width: 150px; height: 165px;
+    border: 1px solid var(--border-c);
+    border-radius: 20px;
     background: var(--bg2);
     cursor: pointer;
     transition: all 0.3s ease;
     font-family: inherit;
     color: var(--text);
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
   }
   .energy-btn::before {
     content: '';
     position: absolute; inset: 0;
-    background: linear-gradient(135deg, var(--gold-dim), transparent);
+    background: linear-gradient(135deg, var(--cyan-dim), transparent);
     opacity: 0; transition: opacity 0.3s;
   }
   .energy-btn:hover::before { opacity: 1; }
   .energy-btn:hover {
-    border-color: var(--gold);
-    transform: translateY(-6px) scale(1.03);
-    box-shadow: 0 16px 40px rgba(245,200,66,0.2);
+    border-color: var(--cyan);
+    transform: translateY(-5px) scale(1.03);
+    box-shadow: 0 12px 36px var(--cyan-glow);
   }
-  .energy-btn:active { transform: translateY(-2px) scale(1.01); }
-  .energy-btn .emoji { font-size: 3rem; }
-  .energy-btn .label { font-size: 1rem; font-weight: 600; }
-  .energy-btn .sub { font-size: 0.75rem; color: var(--text-muted); }
+  .energy-btn:active { transform: translateY(-1px) scale(1.01); }
+  .energy-btn .emoji { font-size: 2.6rem; }
+  .energy-btn .label { font-size: 0.95rem; font-weight: 600; }
+  .energy-btn .sub { font-size: 0.72rem; color: var(--text-muted); }
 
   /* ── Main App Layout ── */
   #app {
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+    display: flex; flex-direction: column;
     align-items: center;
-    padding: 0 0 160px 0; /* bottom padding for fixed mic button */
-    position: relative;
+    padding: 0 0 170px 0;
   }
 
   /* ── Header ── */
   .app-header {
-    display: flex; flex-direction: column;
-    align-items: center; gap: 6px;
-    padding: 28px 20px 12px;
-    width: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px 10px;
+    width: 100%; max-width: 640px;
   }
-  .logo {
-    font-size: 1.1rem; font-weight: 700;
-    letter-spacing: 0.15em;
+  .header-left {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-text {
+    font-size: 1rem; font-weight: 700;
+    letter-spacing: 0.12em;
     color: var(--gold);
     text-transform: uppercase;
+    font-family: var(--mono);
   }
   .energy-badge {
-    font-size: 0.8rem; color: var(--text-muted);
+    font-size: 0.78rem; color: var(--text-muted);
     background: var(--bg3); border: 1px solid var(--border);
     border-radius: 20px; padding: 4px 12px;
     cursor: pointer; transition: all 0.2s;
+    font-family: var(--mono);
   }
   .energy-badge:hover { border-color: var(--gold); color: var(--gold); }
 
-  /* ── HTTPS banner ── */
+  /* ── HTTPS Banner ── */
   #https-banner {
     display: none;
-    background: rgba(245,200,66,0.1);
-    border: 1px solid rgba(245,200,66,0.3);
-    border-radius: 12px;
-    padding: 12px 20px;
+    background: rgba(245,200,66,0.07);
+    border: 1px solid rgba(245,200,66,0.25);
+    border-radius: 10px;
+    padding: 10px 18px;
     max-width: 500px; width: calc(100% - 40px);
     text-align: center;
-    font-size: 0.85rem; color: var(--gold);
-    line-height: 1.5;
-    margin: 8px 20px;
+    font-size: 0.82rem; color: var(--gold);
+    line-height: 1.5; margin: 8px 20px;
   }
 
-  /* ── Priority Blocks Area (top half) ── */
+  /* ── JARVIS Status Line ── */
+  #jarvis-status {
+    width: 100%; max-width: 640px;
+    padding: 6px 20px 0;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--cyan);
+    opacity: 0.75;
+    min-height: 22px;
+    transition: opacity 0.5s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ── Priority Area ── */
   #priority-area {
-    width: 100%;
-    max-width: 600px;
-    padding: 0 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
+    width: 100%; max-width: 640px;
+    padding: 8px 20px 20px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 10px;
     min-height: 200px;
-    padding-bottom: 20px;
   }
 
-  /* 'Create Calm Blocks' button — appears above block list */
+  /* Create Calm Blocks button */
   #create-blocks-btn {
     display: none;
     background: linear-gradient(135deg, var(--gold), var(--gold-light));
     color: #0a0a0f;
     border: none; border-radius: 50px;
-    padding: 16px 36px;
-    font-size: 1rem; font-weight: 700;
-    font-family: inherit;
+    padding: 14px 32px;
+    font-size: 0.95rem; font-weight: 700;
+    font-family: var(--mono);
     cursor: pointer;
-    letter-spacing: 0.02em;
-    box-shadow: 0 8px 30px rgba(245,200,66,0.35);
+    letter-spacing: 0.04em;
+    box-shadow: 0 6px 28px var(--gold-glow);
     transition: all 0.3s ease;
     align-self: center;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
-  #create-blocks-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 14px 40px rgba(245,200,66,0.5);
-  }
+  #create-blocks-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 36px var(--gold-glow); }
   #create-blocks-btn:active { transform: translateY(0); }
   #create-blocks-btn.visible { display: block; animation: fadeIn 0.4s ease; }
 
-  /* ── Priority Block Cards ── */
-  #blocks-list {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+  /* ── Blocks List ── */
+  #blocks-list { width: 100%; display: flex; flex-direction: column; gap: 8px; }
 
+  /* Priority Block Card */
   .priority-block {
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    padding: 13px 14px;
+    display: flex; align-items: center; gap: 11px;
     cursor: grab;
     user-select: none;
-    position: relative;
+    position: relative; overflow: hidden;
     transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.3s;
-    animation: slideUpIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
+    animation: slideUpIn 0.42s cubic-bezier(0.22,1,0.36,1) both;
+    touch-action: pan-y;
   }
+  /* Left accent bar */
+  .priority-block::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--cyan);
+    border-radius: 3px 0 0 3px;
+    transition: background 0.4s;
+  }
+  .priority-block.confirmed::before { background: var(--gold); }
+  .priority-block.confirmed { border-color: rgba(245,200,66,0.2); box-shadow: 0 0 14px rgba(245,200,66,0.08); }
 
   @keyframes slideUpIn {
-    from { opacity: 0; transform: translateY(40px); }
+    from { opacity: 0; transform: translateY(36px); }
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  .priority-block:hover { border-color: var(--purple); }
-  .priority-block.dragging { opacity: 0.35; cursor: grabbing; }
-  .priority-block.drag-over {
-    border-color: var(--gold);
-    box-shadow: 0 0 0 2px rgba(245,200,66,0.2);
-  }
-  .priority-block.removing {
+  .priority-block:hover { border-color: var(--border-c); }
+  .priority-block.dragging { opacity: 0.3; cursor: grabbing; }
+  .priority-block.drag-over { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dim); }
+
+  /* Swipe hint overlay */
+  .swipe-hint {
+    position: absolute; top: 0; bottom: 0;
+    width: 0; overflow: hidden;
+    display: flex; align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    transition: none;
+    pointer-events: none;
+    border-radius: var(--radius);
     opacity: 0;
-    transform: translateX(30px) scale(0.95);
-    transition: all 0.3s ease;
+  }
+  .swipe-hint.right-hint {
+    right: 0; left: auto;
+    background: rgba(255,60,60,0.45);
+  }
+  .swipe-hint.left-hint {
+    left: 0; right: auto;
+    background: rgba(30,200,100,0.45);
+  }
+
+  /* Remove anim for swipe-right delete */
+  @keyframes swipeDeleteAnim {
+    0%   { transform: translateX(0); opacity: 1; }
+    60%  { background: rgba(255,60,60,0.15); }
+    100% { transform: translateX(110%); opacity: 0; }
+  }
+  .priority-block.swipe-delete {
+    animation: swipeDeleteAnim 0.38s cubic-bezier(0.4,0,0.8,1) both;
+  }
+
+  @keyframes swipeConfirmAnim {
+    0%  { transform: translateX(0); }
+    40% { transform: translateX(-22px); box-shadow: 0 0 22px rgba(30,200,100,0.5); }
+    100%{ transform: translateX(0); }
+  }
+  .priority-block.swipe-confirm {
+    animation: swipeConfirmAnim 0.4s cubic-bezier(0.22,1,0.36,1) both;
   }
 
   .block-drag-handle {
-    color: var(--text-muted);
-    font-size: 1.2rem;
-    flex-shrink: 0;
-    opacity: 0.5;
-    cursor: grab;
-    padding: 4px 2px;
-    touch-action: none;
+    color: var(--text-muted); font-size: 1.1rem;
+    flex-shrink: 0; opacity: 0.45; cursor: grab;
+    padding: 4px 2px; touch-action: none;
   }
 
-  .block-text {
-    flex: 1;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    color: var(--text);
-  }
+  .block-content { flex: 1; min-width: 0; }
+  .block-text { font-size: 0.92rem; line-height: 1.5; color: var(--text); }
+  .block-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 
   .block-time-badge {
     flex-shrink: 0;
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 4px 10px;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 500;
-    white-space: nowrap;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px 9px;
+    font-size: 0.72rem; color: var(--text-muted); font-weight: 500;
+    white-space: nowrap; font-family: var(--mono);
   }
-
-  .block-delete {
-    background: none; border: none;
-    cursor: pointer;
-    color: var(--text-muted);
-    font-size: 1rem;
-    opacity: 0.4;
-    transition: opacity 0.2s, color 0.2s;
-    flex-shrink: 0;
-    padding: 4px;
-    line-height: 1;
+  .confidence-badge {
+    font-size: 0.68rem; color: var(--cyan);
+    background: var(--cyan-dim); border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 20px; padding: 2px 7px;
+    font-family: var(--mono); white-space: nowrap;
   }
-  .block-delete:hover { opacity: 1; color: #ff6b6b; }
+  .confirmed-tag {
+    font-size: 0.68rem; color: var(--gold);
+    font-family: var(--mono);
+  }
 
   .ghost-placeholder {
     background: transparent;
-    border: 2px dashed var(--gold);
-    border-radius: var(--radius);
-    opacity: 0.3;
-    pointer-events: none;
+    border: 2px dashed rgba(0,212,255,0.25);
+    border-radius: var(--radius); opacity: 0.4; pointer-events: none;
   }
-
-  /* ── Approved / Calendar message ── */
-  #calendar-msg {
-    display: none;
-    background: var(--bg2);
-    border: 1px solid rgba(245,200,66,0.3);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    width: 100%;
-    font-size: 0.9rem;
-    line-height: 1.6;
-    color: var(--text-muted);
-    text-align: center;
-    animation: fadeIn 0.5s ease;
-  }
-  #calendar-msg.visible { display: block; }
-  #calendar-msg strong { color: var(--gold); }
 
   /* ── Empty hint ── */
   .empty-hint {
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    font-weight: 300;
-    padding: 40px 20px;
-    letter-spacing: 0.01em;
+    text-align: center; color: var(--text-muted);
+    font-size: 0.88rem; font-weight: 300;
+    padding: 36px 20px; letter-spacing: 0.01em;
+    font-family: var(--mono); line-height: 1.7;
   }
 
-  /* ── Fixed bottom mic section ── */
+  /* ── Fixed Mic Section ── */
   #mic-section {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 16px 20px 28px;
-    background: linear-gradient(to top, var(--bg) 70%, transparent);
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 14px 20px 26px;
+    background: linear-gradient(to top, var(--bg) 65%, transparent);
     z-index: 100;
   }
 
-  .mic-hint {
-    font-size: 0.88rem;
-    color: var(--text-muted);
-    font-weight: 300;
-    text-align: center;
-    transition: opacity 0.3s;
-  }
-
-  /* Live transcript — shown above mic */
   #live-transcript {
-    min-height: 24px;
-    max-width: 480px;
-    width: 100%;
-    text-align: center;
-    color: var(--gold-light);
-    font-size: 0.92rem;
-    font-style: italic;
-    font-weight: 300;
-    opacity: 0.85;
-    padding: 0 16px;
-    transition: opacity 0.3s;
-    line-height: 1.4;
+    min-height: 22px; max-width: 480px; width: 100%;
+    text-align: center; color: var(--cyan);
+    font-size: 0.88rem; font-style: italic; font-weight: 300;
+    opacity: 0.8; padding: 0 16px;
+    transition: opacity 0.3s; line-height: 1.4;
+    font-family: var(--mono);
   }
 
-  /* Mic button wrapper for pulse rings */
+  .mic-hint {
+    font-size: 0.85rem; color: var(--text-muted);
+    font-weight: 300; text-align: center;
+    transition: opacity 0.3s; font-family: var(--mono);
+  }
+
   .mic-wrapper {
-    position: relative;
-    width: 100px; height: 100px;
+    position: relative; width: 96px; height: 96px;
     display: flex; align-items: center; justify-content: center;
   }
 
   .pulse-ring {
-    position: absolute;
-    width: 100px; height: 100px;
-    border-radius: 50%;
-    border: 2px solid var(--gold);
-    opacity: 0;
+    position: absolute; width: 96px; height: 96px;
+    border-radius: 50%; border: 2px solid var(--cyan); opacity: 0;
     pointer-events: none;
   }
-  .mic-wrapper.recording .pulse-ring:nth-child(1) { animation: pulseRing 1.5s ease-out infinite; }
-  .mic-wrapper.recording .pulse-ring:nth-child(2) { animation: pulseRing 1.5s ease-out infinite 0.5s; }
-  .mic-wrapper.recording .pulse-ring:nth-child(3) { animation: pulseRing 1.5s ease-out infinite 1s; }
-
+  .mic-wrapper.recording .pulse-ring:nth-child(1) { animation: pulseRing 1.6s ease-out infinite; }
+  .mic-wrapper.recording .pulse-ring:nth-child(2) { animation: pulseRing 1.6s ease-out infinite 0.53s; }
+  .mic-wrapper.recording .pulse-ring:nth-child(3) { animation: pulseRing 1.6s ease-out infinite 1.06s; }
   @keyframes pulseRing {
-    0%   { transform: scale(1); opacity: 0.7; }
-    100% { transform: scale(2.4); opacity: 0; }
+    0%   { transform: scale(1); opacity: 0.65; }
+    100% { transform: scale(2.5); opacity: 0; }
   }
 
   #mic-btn {
     position: relative; z-index: 1;
-    width: 80px; height: 80px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
+    width: 78px; height: 78px; border-radius: 50%;
+    border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    font-size: 2.4rem;
+    font-size: 2.2rem;
     background: conic-gradient(from 0deg, var(--gold), var(--gold-light), #fffbe6, var(--gold-light), var(--gold));
-    box-shadow: 0 0 24px rgba(245,200,66,0.3), 0 0 50px rgba(245,200,66,0.1);
+    box-shadow: 0 0 22px rgba(245,200,66,0.28), 0 0 48px rgba(245,200,66,0.09);
     animation: shimmer 3s linear infinite;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none;
+    user-select: none; -webkit-user-select: none; touch-action: none;
   }
   #mic-btn:active, #mic-btn.active {
-    transform: scale(0.93);
-    box-shadow: 0 0 40px rgba(245,200,66,0.65), 0 0 80px rgba(245,200,66,0.25);
-    animation: shimmer 0.8s linear infinite;
+    transform: scale(0.92);
+    box-shadow: 0 0 38px rgba(245,200,66,0.65), 0 0 78px rgba(245,200,66,0.22);
+    animation: shimmer 0.7s linear infinite;
   }
-
   @keyframes shimmer {
     0%   { filter: brightness(1) saturate(1); }
     50%  { filter: brightness(1.2) saturate(1.3); }
     100% { filter: brightness(1) saturate(1); }
   }
 
+  /* ── Scheduling Panel (full-screen overlay) ── */
+  #schedule-panel {
+    position: fixed; inset: 0; z-index: 500;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.5s cubic-bezier(0.22,1,0.36,1);
+    overflow: hidden;
+  }
+  #schedule-panel.open { transform: translateY(0); }
+
+  .schedule-header {
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #0d1a2b 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border-c);
+    padding: 24px 22px 18px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .schedule-header-top {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .schedule-title {
+    font-family: var(--mono); font-size: 1.1rem; font-weight: 500;
+    color: var(--cyan); letter-spacing: 0.08em;
+  }
+  .schedule-subtitle {
+    font-family: var(--mono); font-size: 0.75rem;
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+
+  #confirm-all-btn {
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: #0a0a0f; border: none; border-radius: 12px;
+    padding: 15px 28px; width: 100%;
+    font-size: 1rem; font-weight: 700; font-family: var(--mono);
+    cursor: pointer; letter-spacing: 0.04em;
+    box-shadow: 0 6px 28px var(--gold-glow);
+    transition: all 0.3s ease;
+  }
+  #confirm-all-btn:hover { box-shadow: 0 10px 36px var(--gold-glow); transform: translateY(-1px); }
+  #confirm-all-btn:active { transform: translateY(0); }
+
+  .schedule-list {
+    flex: 1; overflow-y: auto; padding: 14px 18px 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  /* Scheduled Card */
+  .schedule-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex; align-items: flex-start; gap: 12px;
+    transition: border-color 0.25s, box-shadow 0.25s;
+    position: relative; overflow: hidden;
+  }
+  .schedule-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--cyan);
+    border-radius: 3px 0 0 3px;
+    transition: background 0.3s;
+  }
+  .schedule-card.approved { border-color: rgba(245,200,66,0.25); }
+  .schedule-card.approved::before { background: var(--gold); }
+
+  .schedule-check {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--border-c);
+    background: transparent; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; color: transparent;
+    transition: all 0.22s; margin-top: 2px;
+  }
+  .schedule-check:hover { border-color: var(--gold); }
+  .schedule-card.approved .schedule-check {
+    background: var(--gold); border-color: var(--gold); color: #0a0a0f;
+  }
+
+  .schedule-card-body { flex: 1; min-width: 0; }
+  .schedule-task-name {
+    font-size: 0.93rem; font-weight: 500; color: var(--text);
+    margin-bottom: 4px;
+  }
+  .schedule-time-slot {
+    font-family: var(--mono); font-size: 0.74rem;
+    color: var(--cyan); margin-bottom: 4px;
+  }
+  .energy-dot {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 0.7rem; color: var(--text-muted);
+  }
+  .energy-dot::before {
+    content: '';
+    display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--text-muted);
+  }
+  .energy-dot.low::before  { background: #6b8cff; }
+  .energy-dot.neutral::before { background: #a0a0c0; }
+  .energy-dot.charged::before { background: var(--gold); }
+
+  /* Inline time picker */
+  .time-picker {
+    display: none; margin-top: 10px;
+    display: none; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .time-picker.open { display: flex; }
+  .time-picker input {
+    background: var(--bg3); border: 1px solid var(--border-c);
+    border-radius: 8px; padding: 6px 10px;
+    color: var(--text); font-family: var(--mono); font-size: 0.78rem;
+    outline: none;
+  }
+  .time-picker input:focus { border-color: var(--cyan); }
+
+  .edit-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 0.9rem;
+    padding: 4px 6px; transition: color 0.2s; flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .edit-btn:hover { color: var(--cyan); }
+
+  .schedule-footer {
+    flex-shrink: 0;
+    padding: 14px 20px 28px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .back-link {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-family: var(--mono);
+    font-size: 0.85rem; display: flex; align-items: center; gap: 6px;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--cyan); }
+
   /* ── Reminder Modal ── */
   #reminder-modal {
-    display: none;
-    position: fixed; inset: 0; z-index: 2000;
+    display: none; position: fixed; inset: 0; z-index: 2000;
     background: rgba(10,10,15,0.88);
     backdrop-filter: blur(12px);
-    align-items: center; justify-content: center;
-    padding: 24px;
+    align-items: center; justify-content: center; padding: 24px;
   }
   #reminder-modal.visible { display: flex; animation: fadeIn 0.3s ease; }
 
   .modal-card {
     background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 36px 32px;
-    max-width: 420px; width: 100%;
+    border: 1px solid var(--border-c);
+    border-radius: 22px; padding: 34px 28px;
+    max-width: 400px; width: 100%;
     text-align: center;
-    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+    box-shadow: 0 28px 70px rgba(0,0,0,0.65), 0 0 40px rgba(0,212,255,0.06);
   }
-  .modal-icon { font-size: 3rem; margin-bottom: 16px; }
-  .modal-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; }
+  .modal-icon { font-size: 2.6rem; margin-bottom: 14px; }
+  .modal-title {
+    font-family: var(--mono); font-size: 1rem;
+    font-weight: 500; color: var(--cyan);
+    letter-spacing: 0.08em; margin-bottom: 10px;
+    text-transform: uppercase;
+  }
   .modal-task-text {
-    font-size: 1rem; color: var(--gold);
-    font-style: italic; margin-bottom: 28px; line-height: 1.5;
+    font-size: 0.95rem; color: var(--gold);
+    font-style: italic; margin-bottom: 26px; line-height: 1.5;
   }
-  .modal-actions { display: flex; flex-direction: column; gap: 10px; }
+  .modal-actions { display: flex; flex-direction: column; gap: 9px; }
 
   .btn-dismiss {
     background: transparent; border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px;
-    color: var(--text-muted); font-size: 0.95rem; font-family: inherit;
+    border-radius: 10px; padding: 13px;
+    color: var(--text-muted); font-size: 0.9rem; font-family: inherit;
     cursor: pointer; transition: all 0.2s;
   }
   .btn-dismiss:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
   .btn-snooze {
     background: var(--bg3); border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px;
-    color: var(--text); font-size: 0.95rem; font-family: inherit;
+    border-radius: 10px; padding: 13px;
+    color: var(--text); font-size: 0.9rem; font-family: inherit;
     cursor: pointer; transition: all 0.2s;
   }
-  .btn-snooze:hover { border-color: var(--purple); }
+  .btn-snooze:hover { border-color: var(--cyan); }
 
   .btn-reschedule {
     background: linear-gradient(135deg, var(--gold), var(--gold-light));
-    color: #0a0a0f; border: none; border-radius: 12px; padding: 14px;
-    font-size: 0.95rem; font-weight: 700; font-family: inherit;
+    color: #0a0a0f; border: none; border-radius: 10px; padding: 13px;
+    font-size: 0.9rem; font-weight: 700; font-family: inherit;
     cursor: pointer; transition: all 0.2s;
   }
-  .btn-reschedule:hover { box-shadow: 0 4px 20px rgba(245,200,66,0.4); }
+  .btn-reschedule:hover { box-shadow: 0 4px 18px var(--gold-glow); }
 
   /* ── Utilities ── */
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut  { from { opacity: 1; } to { opacity: 0; } }
 
   @media (max-width: 480px) {
-    .energy-btn { width: 130px; height: 155px; }
-    .modal-card { padding: 28px 20px; }
+    .energy-btn { width: 126px; height: 148px; }
+    .modal-card { padding: 26px 18px; }
   }
 </style>
 <script>
@@ -1132,13 +1303,16 @@ html[data-convos-surface="small"] convos-page {
 </head>
 <body>
 
-<!-- ══════════════════════════════════════ -->
-<!--  ENERGY SCREEN                         -->
-<!-- ══════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ENERGY SCREEN                                            -->
+<!-- ══════════════════════════════════════════════════════════ -->
 <div id="energy-screen">
   <div class="energy-title">
-    <h1>VoiceMind</h1>
-    <p>How's your energy right now?</p>
+    <div class="logo-row">
+      <span class="arc-reactor large pulse">⬡</span>
+      <h1>VoiceMind</h1>
+    </div>
+    <p>// energy level assessment required</p>
   </div>
   <div class="energy-buttons">
     <button class="energy-btn" data-energy="low" onclick="setEnergy('low')">
@@ -1159,50 +1333,43 @@ html[data-convos-surface="small"] convos-page {
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ -->
-<!--  MAIN APP                             -->
-<!-- ══════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  MAIN APP                                                  -->
+<!-- ══════════════════════════════════════════════════════════ -->
 <div id="app" style="display:none">
 
-  <!-- Header -->
   <div class="app-header">
-    <div class="logo">VoiceMind</div>
+    <div class="header-left">
+      <span class="arc-reactor pulse">⬡</span>
+      <span class="logo-text">VoiceMind</span>
+    </div>
     <div class="energy-badge" id="energy-badge" onclick="resetEnergy()">
       <span id="energy-badge-text"></span> · tap to change
     </div>
   </div>
 
-  <!-- HTTPS warning -->
+  <div id="jarvis-status">// system online</div>
+
   <div id="https-banner">
     ⚠️ Microphone access requires HTTPS or localhost.<br>
-    Open this file via a local server or use Chrome. Typed input still works.
+    Open this file via a local server or use Chrome.
   </div>
 
-  <!-- Priority Blocks Area -->
   <div id="priority-area">
-
-    <!-- Calendar / scheduling message (FIX 6) -->
-    <div id="calendar-msg"></div>
-
-    <!-- 'Create Calm Blocks' button — shown above list when 2+ blocks exist -->
-    <button id="create-blocks-btn" onclick="createCalmBlocks()">Create Calm Blocks ✦</button>
-
-    <!-- The actual list of draggable priority blocks -->
+    <button id="create-blocks-btn" onclick="openSchedulePanel()">Create Calm Blocks ✦</button>
     <div id="blocks-list"></div>
-
-    <!-- Empty prompt -->
     <div id="empty-hint" class="empty-hint">
-      Hold the mic below and speak your thoughts.<br>Each thought becomes a priority block.
+      // awaiting input<br>
+      Hold the mic and speak your thoughts.<br>Each thought becomes a priority block.
     </div>
-
   </div>
 
 </div>
 
-<!-- Fixed bottom mic section -->
+<!-- Fixed mic section -->
 <div id="mic-section" style="display:none">
   <div id="live-transcript"></div>
-  <p class="mic-hint" id="mic-hint">What's on your mind?</p>
+  <p class="mic-hint" id="mic-hint">Hold to speak</p>
   <div class="mic-wrapper" id="mic-wrapper">
     <div class="pulse-ring"></div>
     <div class="pulse-ring"></div>
@@ -1211,55 +1378,123 @@ html[data-convos-surface="small"] convos-page {
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ -->
-<!--  REMINDER MODAL                        -->
-<!-- ══════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SCHEDULING PANEL                                          -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="schedule-panel">
+  <div class="schedule-header">
+    <div class="schedule-header-top">
+      <span class="arc-reactor large">⬡</span>
+      <div>
+        <div class="schedule-title">Schedule Analysis</div>
+        <div class="schedule-subtitle">// optimizing for your energy profile</div>
+      </div>
+    </div>
+    <button id="confirm-all-btn" onclick="confirmAllTasks()">Confirm All ✦</button>
+  </div>
+
+  <div class="schedule-list" id="schedule-list"></div>
+
+  <div class="schedule-footer">
+    <button class="back-link" onclick="closeSchedulePanel()">← Back to capture</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  REMINDER MODAL                                            -->
+<!-- ══════════════════════════════════════════════════════════ -->
 <div id="reminder-modal">
   <div class="modal-card">
-    <div class="modal-icon">🔔</div>
-    <div class="modal-title">Gentle Nudge</div>
+    <div class="modal-icon">⬡</div>
+    <div class="modal-title">Attention</div>
     <div class="modal-task-text" id="modal-task-text"></div>
     <div class="modal-actions">
-      <button class="btn-reschedule" onclick="handleModalAction('reschedule')">⏱ Reschedule</button>
+      <button class="btn-reschedule" onclick="handleModalAction('reschedule')">⏱ Reschedule +1h</button>
       <button class="btn-snooze"     onclick="handleModalAction('snooze')">💤 Snooze 15 min</button>
-      <button class="btn-dismiss"    onclick="handleModalAction('dismiss')">✕ Dismiss</button>
+      <button class="btn-dismiss"    onclick="handleModalAction('dismiss')">Dismiss</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ -->
-<!--  JAVASCRIPT                           -->
-<!-- ══════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  JAVASCRIPT                                                -->
+<!-- ══════════════════════════════════════════════════════════ -->
 <script>
 'use strict';
 
-// ── State ──────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────
 let energyLevel = null;
-let priorityBlocks = [];      // [{id, text, minutes}]
-let reminderTimers = {};
+let priorityBlocks = []; // [{id, text, minutes, confidence, confirmed, scheduledAt}]
+let reminderTimers  = {};
 let currentReminderTask = null;
-
-let recognition = null;
-let isRecording = false;
-let committedTranscript = '';  // FIX 1: only final results
-let lastCommitted = '';        // FIX 1: dedup guard
-
 let audioCtx = null;
-let ghostEl = null;
+let ghostEl  = null;
 
-// ── Init ───────────────────────────────────────────────
+// ── JARVIS Voice ─────────────────────────────────────────────
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getJarvisVoice() {
+  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  // Prefer Daniel (UK English), then Google UK English Male, then any English male
+  const pref = [
+    v => v.name === 'Daniel',
+    v => /google uk english male/i.test(v.name),
+    v => /daniel|alex|fred|bruce|richard/i.test(v.name) && v.lang.startsWith('en'),
+    v => v.lang === 'en-GB',
+    v => v.lang.startsWith('en')
+  ];
+  for (const fn of pref) {
+    const found = voices.find(fn);
+    if (found) return found;
+  }
+  return null;
+}
+
+function jarvisSpeak(text, onEnd) {
+  if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate   = 0.85;
+  utter.pitch  = 0.9;
+  utter.volume = 0.92;
+  const voice  = getJarvisVoice();
+  if (voice) utter.voice = voice;
+  if (onEnd) utter.onend = onEnd;
+  setJarvisStatus('> ' + text);
+  setTimeout(() => window.speechSynthesis.speak(utter), 60);
+}
+
+function setJarvisStatus(text) {
+  const el = document.getElementById('jarvis-status');
+  if (!el) return;
+  el.textContent = text;
+  el.style.opacity = '0.85';
+  clearTimeout(el._fadeTimer);
+  el._fadeTimer = setTimeout(() => { el.style.opacity = '0.35'; }, 4500);
+}
+
+// ── Init ─────────────────────────────────────────────────────
 (function init() {
   const saved = sessionStorage.getItem('vm_energy');
   if (saved) {
     energyLevel = saved;
     showApp();
   }
-  setupSpeechRecognition();
   setupMicButton();
   requestNotificationPermission();
+  // Pre-warm voice list
+  if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.getVoices();
+  }
 })();
 
-// ── Energy ─────────────────────────────────────────────
+// ── Energy ───────────────────────────────────────────────────
 function setEnergy(level) {
   energyLevel = level;
   sessionStorage.setItem('vm_energy', level);
@@ -1272,134 +1507,132 @@ function showApp() {
   document.getElementById('mic-section').style.display = 'flex';
   const labels = { low: '🌑 Low', neutral: '🌤 Neutral', charged: '⚡ Charged' };
   document.getElementById('energy-badge-text').textContent = labels[energyLevel] || energyLevel;
+  // JARVIS greeting
+  setTimeout(() => {
+    jarvisSpeak(`${getGreeting()}. VoiceMind is online. What's on your mind?`);
+  }, 600);
 }
 
 function resetEnergy() {
   sessionStorage.removeItem('vm_energy');
   energyLevel = null;
+  window.speechSynthesis && window.speechSynthesis.cancel();
   document.getElementById('energy-screen').classList.remove('hidden');
   document.getElementById('app').style.display = 'none';
   document.getElementById('mic-section').style.display = 'none';
 }
 
-// ── FIX 2: AI text cleanup (Wispr Flow style) ──────────
-const FILLER_WORDS = /\b(um+|uh+|like|you know|basically|literally|actually|right\?|so+)\b/gi;
+// ── Speech Accuracy: Clean transcript ───────────────────────
+const FILLERS = /\b(um+|uh+|er+|like|you know|basically|literally|actually|right\?|so+|i mean|kind of|sort of)\b/gi;
 
-function cleanupTranscript(text) {
+function cleanTranscript(text) {
   if (!text || !text.trim()) return '';
-
-  // (a) Strip filler words
-  let cleaned = text.replace(FILLER_WORDS, '').replace(/\s{2,}/g, ' ').trim();
-
-  // (b) Deduplicate consecutive repeated words/phrases
-  // Handles "need to need to" → "need to", "the the" → "the", etc.
-  cleaned = cleaned.replace(/\b(\w+(?:\s+\w+){0,3})\s+\1\b/gi, '$1');
-  // Run twice to catch chained duplicates
-  cleaned = cleaned.replace(/\b(\w+(?:\s+\w+){0,3})\s+\1\b/gi, '$1');
-
-  // (c) Fix common speech-to-text misrecognitions
-  const fixes = [
-    [/\bneed to need to\b/gi, 'need to'],
-    [/\bwant to want to\b/gi, 'want to'],
-    [/\bgoing to going to\b/gi, 'going to'],
-    [/\bgonna gonna\b/gi, 'gonna'],
-    [/\bi i\b/gi, 'I'],
-    [/\bthe the\b/gi, 'the'],
+  let c = text.replace(FILLERS, '').replace(/\s{2,}/g, ' ').trim();
+  // Collapse repeated words
+  c = c.replace(/\b(\w+)( \1)+\b/gi, '$1');
+  c = c.replace(/\b(\w+)( \1)+\b/gi, '$1'); // run twice
+  // Fix common pairs
+  const pairs = [
+    [/\bi i\b/gi, 'I'], [/\bthe the\b/gi, 'the'],
+    [/\bto to\b/gi, 'to'], [/\band and\b/gi, 'and'],
   ];
-  fixes.forEach(([pattern, replacement]) => {
-    cleaned = cleaned.replace(pattern, replacement);
-  });
-
-  // (d) Capitalize first letter
-  cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-
-  // (e) Add period if missing end punctuation
-  if (cleaned && !/[.!?]$/.test(cleaned)) {
-    cleaned += '.';
-  }
-
-  return cleaned;
+  pairs.forEach(([p, r]) => { c = c.replace(p, r); });
+  // Capitalize + period
+  if (!c) return '';
+  c = c.charAt(0).toUpperCase() + c.slice(1);
+  if (!/[.!?]$/.test(c)) c += '.';
+  return c;
 }
 
-// ── FIX 1: Speech Recognition (dedup + isFinal only) ──
-function setupSpeechRecognition() {
+// ── Speech Recognition: new instance per hold ───────────────
+let isRecording = false;
+let currentRec  = null;
+let pendingTranscript = '';
+let pendingConfidence = 0;
+
+function createRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    const banner = document.getElementById('https-banner');
-    banner.style.display = 'block';
-    banner.innerHTML = '⚠️ Your browser does not support the Web Speech API. Please use Chrome.';
-    return;
-  }
+  if (!SR) return null;
+  const rec = new SR();
+  rec.continuous      = false;
+  rec.interimResults  = true;
+  rec.maxAlternatives = 3;
+  rec.lang            = 'en-US';
 
-  recognition = new SR();
-  recognition.continuous = true;
-  recognition.interimResults = true;  // for live display only
-  recognition.lang = 'en-US';
-
-  recognition.onresult = (e) => {
-    let interimText = '';
-
+  rec.onresult = (e) => {
+    let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const result = e.results[i];
-      const transcript = result[0].transcript;
-
       if (result.isFinal) {
-        // FIX 1: Only commit final results, never interim
-        const trimmed = transcript.trim();
-
-        // Dedup: don't append if this exact text was just committed
-        if (trimmed && trimmed !== lastCommitted) {
-          committedTranscript = (committedTranscript + ' ' + trimmed).trim();
-          lastCommitted = trimmed;
+        // Pick alternative with highest confidence
+        let best = result[0];
+        for (let j = 1; j < result.length; j++) {
+          if (result[j].confidence > best.confidence) best = result[j];
         }
-        // Clear interim display once we have a final result
-        interimText = '';
+        const trimmed = best.transcript.trim();
+        if (trimmed) {
+          pendingTranscript += (pendingTranscript ? ' ' : '') + trimmed;
+          pendingConfidence  = Math.max(pendingConfidence, best.confidence || 0);
+        }
+        interim = '';
       } else {
-        // Show interim for live feedback only — never commit it
-        interimText += transcript;
+        interim += result[0].transcript;
       }
     }
-
-    // Update live transcript display
     const liveEl = document.getElementById('live-transcript');
-    if (interimText) {
-      liveEl.textContent = (committedTranscript ? committedTranscript + ' ' : '') + interimText;
-    } else if (committedTranscript) {
-      liveEl.textContent = committedTranscript;
+    if (liveEl) {
+      liveEl.textContent = pendingTranscript
+        ? (pendingTranscript + (interim ? ' ' + interim : ''))
+        : interim;
     }
   };
 
-  recognition.onerror = (e) => {
+  rec.onerror = (e) => {
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       document.getElementById('https-banner').style.display = 'block';
     }
-    stopRecording(false);
+    // On 'no-speech' or 'aborted' just stop gracefully
+    if (isRecording) stopRecording(false);
   };
 
-  recognition.onend = () => {
+  rec.onend = () => {
+    // If still recording (continuous workaround), restart
     if (isRecording) {
-      try { recognition.start(); } catch(ex) {}
+      try { rec.start(); } catch(ex) {}
     }
   };
+
+  return rec;
 }
 
-// ── FIX 4: Mic Button — fixed bottom center ────────────
+// ── Mic Button ───────────────────────────────────────────────
 function setupMicButton() {
-  const btn = document.getElementById('mic-btn');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    const b = document.getElementById('https-banner');
+    b.style.display = 'block';
+    b.innerHTML = '⚠️ Your browser does not support the Web Speech API. Use Chrome.';
+  }
+
+  const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
 
   function startRec(e) {
     e.preventDefault();
     if (isRecording) return;
-    isRecording = true;
-    committedTranscript = '';
-    lastCommitted = '';
+    isRecording       = true;
+    pendingTranscript = '';
+    pendingConfidence = 0;
     document.getElementById('live-transcript').textContent = '';
     document.getElementById('mic-hint').textContent = 'Listening… release when done';
     btn.classList.add('active');
     wrapper.classList.add('recording');
-    if (recognition) {
-      try { recognition.start(); } catch(ex) {}
+    document.body.classList.add('recording-active');
+
+    // Create FRESH recognition instance each time
+    currentRec = createRecognition();
+    if (currentRec) {
+      try { currentRec.start(); } catch(ex) {}
     }
   }
 
@@ -1409,64 +1642,65 @@ function setupMicButton() {
     stopRecording(true);
   }
 
-  btn.addEventListener('mousedown',  startRec);
-  btn.addEventListener('touchstart', startRec, { passive: false });
-  btn.addEventListener('mouseup',    stopRec);
-  btn.addEventListener('touchend',   stopRec);
-  btn.addEventListener('mouseleave', stopRec);
-  btn.addEventListener('contextmenu', e => e.preventDefault());
+  btn.addEventListener('pointerdown',  startRec);
+  btn.addEventListener('pointerup',    stopRec);
+  btn.addEventListener('pointerleave', stopRec);
+  btn.addEventListener('contextmenu',  e => e.preventDefault());
+  btn.setPointerCapture && btn.addEventListener('pointerdown', (e) => {
+    try { btn.setPointerCapture(e.pointerId); } catch(ex) {}
+  });
 }
 
 function stopRecording(save) {
   isRecording = false;
-  const btn = document.getElementById('mic-btn');
+  const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
   btn.classList.remove('active');
   wrapper.classList.remove('recording');
-  document.getElementById('mic-hint').textContent = "What's on your mind?";
+  document.body.classList.remove('recording-active');
+  document.getElementById('mic-hint').textContent = 'Hold to speak';
 
-  if (recognition) {
-    try { recognition.stop(); } catch(ex) {}
+  if (currentRec) {
+    try { currentRec.stop(); } catch(ex) {}
+    currentRec = null;
   }
 
-  // FIX 1 + FIX 2: clean and commit
-  const raw = committedTranscript.trim();
+  const raw = pendingTranscript.trim();
   if (save && raw) {
-    const cleaned = cleanupTranscript(raw);
+    const cleaned = cleanTranscript(raw);
     if (cleaned) {
-      addPriorityBlock(cleaned);
+      const conf = pendingConfidence;
+      addPriorityBlock(cleaned, conf);
+      jarvisSpeak("Understood. I'll process that.");
     }
   }
 
-  committedTranscript = '';
-  lastCommitted = '';
+  pendingTranscript = '';
+  pendingConfidence = 0;
   setTimeout(() => {
-    document.getElementById('live-transcript').textContent = '';
-  }, 500);
+    const lt = document.getElementById('live-transcript');
+    if (lt) lt.textContent = '';
+  }, 600);
 }
 
-// ── FIX 5: Priority Blocks ─────────────────────────────
-const HARD_KEYWORDS = ['plan','strategy','write','design','create','build','develop','analyze','research','think','solve','decide','review','prepare','organize','complex','difficult'];
-const MEDIUM_KEYWORDS = ['call','email','send','reply','check','update','edit','fix','schedule','meet','discuss','coordinate','follow'];
+// ── Priority Blocks ───────────────────────────────────────────
+const HARD_KW   = ['plan','strategy','write','design','create','build','develop','analyze','research','think','solve','decide','review','prepare','organize','complex','difficult'];
+const MEDIUM_KW = ['call','email','send','reply','check','update','edit','fix','schedule','meet','discuss','coordinate','follow'];
 
 function estimateMinutes(text) {
   const lower = text.toLowerCase();
-  const hardCount = HARD_KEYWORDS.filter(k => lower.includes(k)).length;
-  const medCount  = MEDIUM_KEYWORDS.filter(k => lower.includes(k)).length;
-  const words = text.split(/\s+/).length;
-  if (hardCount >= 2 || words > 30) return 60;
-  if (hardCount >= 1 || words > 20) return 45;
-  if (medCount >= 1 || words > 10) return 30;
+  const h = HARD_KW.filter(k => lower.includes(k)).length;
+  const m = MEDIUM_KW.filter(k => lower.includes(k)).length;
+  const w = text.split(/\s+/).length;
+  if (h >= 2 || w > 30) return 60;
+  if (h >= 1 || w > 20) return 45;
+  if (m >= 1 || w > 10) return 30;
   return 15;
 }
 
-function addPriorityBlock(text) {
+function addPriorityBlock(text, confidence) {
   const id = 'pb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-  const block = {
-    id,
-    text,
-    minutes: estimateMinutes(text)
-  };
+  const block = { id, text, minutes: estimateMinutes(text), confidence: confidence || 0, confirmed: false };
   priorityBlocks.push(block);
   renderNewBlock(block);
   updateUI();
@@ -1477,38 +1711,69 @@ function renderNewBlock(block) {
   const list = document.getElementById('blocks-list');
   const el = createBlockElement(block);
   list.appendChild(el);
-  // Attach drag events for this new block
-  attachDragEvents(el);
+  attachBlockEvents(el, block);
 }
 
 function createBlockElement(block) {
   const el = document.createElement('div');
-  el.className = 'priority-block';
+  el.className = 'priority-block' + (block.confirmed ? ' confirmed' : '');
   el.dataset.id = block.id;
-  el.draggable = true;
+  el.draggable  = true;
+
+  const confPct  = block.confidence > 0 ? Math.round(block.confidence * 100) + '%' : '';
+  const confBadge = confPct ? `<span class="confidence-badge">${confPct}</span>` : '';
+  const confirmedTag = block.confirmed ? `<span class="confirmed-tag">✓ confirmed</span>` : '';
 
   el.innerHTML = `
+    <div class="swipe-hint right-hint" id="sh-r-${block.id}">🗑</div>
+    <div class="swipe-hint left-hint"  id="sh-l-${block.id}">✓</div>
     <div class="block-drag-handle" title="Drag to reorder">≡</div>
-    <div class="block-text">${escHtml(block.text)}</div>
-    <div class="block-time-badge">⏱ ${block.minutes}m</div>
-    <button class="block-delete" onclick="deleteBlock('${block.id}')" title="Remove">✕</button>
+    <div class="block-content">
+      <div class="block-text">${escHtml(block.text)}</div>
+      <div class="block-meta">
+        <div class="block-time-badge">⏱ ${block.minutes}m</div>
+        ${confBadge}
+        ${confirmedTag}
+      </div>
+    </div>
   `;
   return el;
 }
 
-// FIX 3: Delete block with smooth fade-out
+function refreshBlockEl(block) {
+  const el = document.querySelector(`.priority-block[data-id="${block.id}"]`);
+  if (!el) return;
+  const newEl = createBlockElement(block);
+  el.parentNode.replaceChild(newEl, el);
+  attachBlockEvents(newEl, block);
+}
+
 function deleteBlock(id) {
   const el = document.querySelector(`.priority-block[data-id="${id}"]`);
   if (el) {
-    el.classList.add('removing');
+    el.classList.add('swipe-delete');
     setTimeout(() => {
       el.remove();
       priorityBlocks = priorityBlocks.filter(b => b.id !== id);
       updateUI();
-    }, 300);
+    }, 400);
   } else {
     priorityBlocks = priorityBlocks.filter(b => b.id !== id);
     updateUI();
+  }
+}
+
+function confirmBlock(id) {
+  const block = priorityBlocks.find(b => b.id === id);
+  if (!block) return;
+  block.confirmed = true;
+  const el = document.querySelector(`.priority-block[data-id="${id}"]`);
+  if (el) {
+    el.classList.add('swipe-confirm');
+    setTimeout(() => {
+      el.classList.remove('swipe-confirm');
+      refreshBlockEl(block);
+    }, 420);
   }
 }
 
@@ -1516,31 +1781,113 @@ function updateUI() {
   const count = priorityBlocks.length;
   const emptyHint = document.getElementById('empty-hint');
   const createBtn = document.getElementById('create-blocks-btn');
-
   if (count === 0) {
     emptyHint.style.display = '';
     createBtn.classList.remove('visible');
   } else {
     emptyHint.style.display = 'none';
-    // Show 'Create Calm Blocks' button when 2+ blocks
-    if (count >= 2) {
-      createBtn.classList.add('visible');
-    } else {
-      createBtn.classList.remove('visible');
-    }
+    if (count >= 2) createBtn.classList.add('visible');
+    else createBtn.classList.remove('visible');
   }
 }
 
-// FIX 5: Drag-to-reorder — both mouse (HTML5 DnD) and touch
-let dragSrcId = null;
+// ── Swipe Gestures + Drag ─────────────────────────────────────
+function attachBlockEvents(el, block) {
+  attachDragEvents(el);
+  attachSwipeEvents(el, block);
+}
 
+function attachSwipeEvents(el, block) {
+  let startX = 0, startY = 0, curX = 0;
+  let swiping = false;
+  let swipeAxis = null; // 'h' or 'v'
+  const THRESHOLD = 80;
+
+  const rightHint = el.querySelector('.swipe-hint.right-hint');
+  const leftHint  = el.querySelector('.swipe-hint.left-hint');
+
+  function onStart(e) {
+    const touch = e.touches ? e.touches[0] : e;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    curX   = startX;
+    swiping    = true;
+    swipeAxis  = null;
+  }
+
+  function onMove(e) {
+    if (!swiping) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+
+    // Determine axis on first meaningful movement
+    if (!swipeAxis) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        swipeAxis = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    }
+
+    if (swipeAxis !== 'h') return; // let vertical scroll pass
+    e.preventDefault();
+
+    curX = touch.clientX;
+    const delta = curX - startX;
+
+    // Show swipe hints
+    if (delta > 8) {
+      const w = Math.min(delta, 100);
+      rightHint.style.width  = w + 'px';
+      rightHint.style.opacity = Math.min(delta / THRESHOLD, 1);
+      leftHint.style.width   = '0';
+      leftHint.style.opacity = '0';
+    } else if (delta < -8) {
+      const w = Math.min(-delta, 100);
+      leftHint.style.width  = w + 'px';
+      leftHint.style.opacity = Math.min(-delta / THRESHOLD, 1);
+      rightHint.style.width  = '0';
+      rightHint.style.opacity = '0';
+    } else {
+      rightHint.style.width = '0'; rightHint.style.opacity = '0';
+      leftHint.style.width  = '0'; leftHint.style.opacity  = '0';
+    }
+  }
+
+  function onEnd(e) {
+    if (!swiping) return;
+    swiping   = false;
+    const delta = curX - startX;
+
+    // Reset hints
+    rightHint.style.width = '0'; rightHint.style.opacity = '0';
+    leftHint.style.width  = '0'; leftHint.style.opacity  = '0';
+
+    if (swipeAxis !== 'h') return;
+
+    if (delta > THRESHOLD) {
+      // Swipe RIGHT → delete
+      jarvisSpeak('Removed.');
+      deleteBlock(block.id);
+    } else if (delta < -THRESHOLD) {
+      // Swipe LEFT → confirm
+      jarvisSpeak('Task confirmed.');
+      confirmBlock(block.id);
+    }
+    swipeAxis = null;
+  }
+
+  el.addEventListener('touchstart', onStart, { passive: true });
+  el.addEventListener('touchmove',  onMove,  { passive: false });
+  el.addEventListener('touchend',   onEnd,   { passive: true });
+}
+
+// ── Drag to Reorder ───────────────────────────────────────────
 function attachDragEvents(el) {
-  // ── HTML5 Drag (desktop) ──
+  // HTML5 DnD (desktop)
   el.addEventListener('dragstart', e => {
-    dragSrcId = el.dataset.id;
+    el._dragId = el.dataset.id;
     el.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-
     ghostEl = document.createElement('div');
     ghostEl.className = 'priority-block ghost-placeholder';
     ghostEl.style.height = el.offsetHeight + 'px';
@@ -1548,55 +1895,48 @@ function attachDragEvents(el) {
 
   el.addEventListener('dragend', () => {
     el.classList.remove('dragging');
-    if (ghostEl && ghostEl.parentNode) {
-      ghostEl.parentNode.replaceChild(el, ghostEl);
-    }
+    if (ghostEl && ghostEl.parentNode) ghostEl.parentNode.replaceChild(el, ghostEl);
     ghostEl = null;
-    dragSrcId = null;
     document.querySelectorAll('.priority-block').forEach(b => b.classList.remove('drag-over'));
     syncBlocksOrderFromDOM();
   });
 
   el.addEventListener('dragover', e => {
     e.preventDefault();
-    if (!dragSrcId || el.dataset.id === dragSrcId || el === ghostEl) return;
+    if (!el._dragId || el.dataset.id === el._dragId || el === ghostEl) return;
     e.dataTransfer.dropEffect = 'move';
     const rect = el.getBoundingClientRect();
-    if (e.clientY < rect.top + rect.height / 2) {
-      el.parentNode.insertBefore(ghostEl, el);
-    } else {
-      el.parentNode.insertBefore(ghostEl, el.nextSibling);
-    }
+    if (e.clientY < rect.top + rect.height / 2) el.parentNode.insertBefore(ghostEl, el);
+    else el.parentNode.insertBefore(ghostEl, el.nextSibling);
   });
 
-  // ── Touch Drag ──
-  let touchOffsetY = 0;
-  let touchClone = null;
+  // Touch drag (vertical)
+  let touchOffsetY = 0, touchClone = null;
 
   el.addEventListener('touchstart', e => {
+    if (el._swipeAxisLocked === 'h') return; // let swipe handle it
     const touch = e.touches[0];
-    const rect = el.getBoundingClientRect();
+    const rect  = el.getBoundingClientRect();
+    const dx = Math.abs(touch.clientX - rect.left - rect.width / 2);
+    const dy = Math.abs(touch.clientY - rect.top  - rect.height / 2);
+    // Only handle drag if touch starts near the drag handle
+    const handle = el.querySelector('.block-drag-handle');
+    if (handle) {
+      const hr = handle.getBoundingClientRect();
+      const inHandle = touch.clientX >= hr.left - 12 && touch.clientX <= hr.right + 12
+                    && touch.clientY >= hr.top  - 8  && touch.clientY <= hr.bottom + 8;
+      if (!inHandle) return;
+    }
     touchOffsetY = touch.clientY - rect.top;
-    dragSrcId = el.dataset.id;
     el.classList.add('dragging');
-
-    // Create a visual clone that follows the finger
     touchClone = el.cloneNode(true);
     touchClone.style.cssText = `
-      position: fixed;
-      width: ${rect.width}px;
-      left: ${rect.left}px;
-      top: ${touch.clientY - touchOffsetY}px;
-      z-index: 9999;
-      opacity: 0.9;
-      pointer-events: none;
-      transform: scale(1.03);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-      transition: none;
+      position:fixed; width:${rect.width}px; left:${rect.left}px;
+      top:${touch.clientY - touchOffsetY}px; z-index:9999;
+      opacity:0.9; pointer-events:none; transform:scale(1.02);
+      box-shadow:0 10px 36px rgba(0,0,0,0.5); transition:none;
     `;
     document.body.appendChild(touchClone);
-
-    // Insert ghost placeholder
     ghostEl = document.createElement('div');
     ghostEl.className = 'priority-block ghost-placeholder';
     ghostEl.style.height = rect.height + 'px';
@@ -1604,36 +1944,26 @@ function attachDragEvents(el) {
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
+    if (!touchClone) return;
     e.preventDefault();
     const touch = e.touches[0];
-    if (touchClone) {
-      touchClone.style.top = (touch.clientY - touchOffsetY) + 'px';
-    }
-
-    // Find element under touch point
-    touchClone && (touchClone.style.display = 'none');
-    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-    touchClone && (touchClone.style.display = '');
-
-    const targetBlock = elementBelow && elementBelow.closest('.priority-block:not(.ghost-placeholder)');
-    if (targetBlock && targetBlock !== el && targetBlock !== ghostEl) {
-      const rect = targetBlock.getBoundingClientRect();
-      if (touch.clientY < rect.top + rect.height / 2) {
-        targetBlock.parentNode.insertBefore(ghostEl, targetBlock);
-      } else {
-        targetBlock.parentNode.insertBefore(ghostEl, targetBlock.nextSibling);
-      }
+    touchClone.style.top = (touch.clientY - touchOffsetY) + 'px';
+    touchClone.style.display = 'none';
+    const below = document.elementFromPoint(touch.clientX, touch.clientY);
+    touchClone.style.display = '';
+    const tb = below && below.closest('.priority-block:not(.ghost-placeholder)');
+    if (tb && tb !== el && tb !== ghostEl) {
+      const rect = tb.getBoundingClientRect();
+      if (touch.clientY < rect.top + rect.height / 2) tb.parentNode.insertBefore(ghostEl, tb);
+      else tb.parentNode.insertBefore(ghostEl, tb.nextSibling);
     }
   }, { passive: false });
 
   el.addEventListener('touchend', () => {
     if (touchClone) { touchClone.remove(); touchClone = null; }
     el.classList.remove('dragging');
-    if (ghostEl && ghostEl.parentNode) {
-      ghostEl.parentNode.replaceChild(el, ghostEl);
-    }
+    if (ghostEl && ghostEl.parentNode) ghostEl.parentNode.replaceChild(el, ghostEl);
     ghostEl = null;
-    dragSrcId = null;
     syncBlocksOrderFromDOM();
   });
 }
@@ -1648,49 +1978,169 @@ function syncBlocksOrderFromDOM() {
   priorityBlocks = newOrder;
 }
 
-// ── FIX 5 + FIX 6: Create Calm Blocks ─────────────────
-function createCalmBlocks() {
-  if (priorityBlocks.length === 0) return;
-
-  // Sort based on energy level
+// ── Scheduling Algorithm ──────────────────────────────────────
+function computeSchedule() {
+  // Sort by energy preference
+  const sorted = [...priorityBlocks];
   if (energyLevel === 'low') {
-    priorityBlocks.sort((a, b) => a.minutes - b.minutes);
+    sorted.sort((a, b) => a.minutes - b.minutes); // short tasks first
   } else if (energyLevel === 'charged') {
-    priorityBlocks.sort((a, b) => b.minutes - a.minutes);
+    sorted.sort((a, b) => b.minutes - a.minutes); // long tasks first
   }
 
-  // Re-render sorted list
+  const now   = new Date();
+  let cursor  = new Date(now.getTime() + 60 * 60000); // start 1h from now
+  cursor.setSeconds(0, 0);
+  cursor.setMinutes(Math.ceil(cursor.getMinutes() / 15) * 15); // round to :00/:15/:30/:45
+
+  const GAP = 30; // minutes between tasks
+
+  return sorted.map(block => {
+    const start = new Date(cursor);
+    const mins  = block.minutes;
+    const end   = new Date(start.getTime() + mins * 60000);
+
+    // Format time slot string
+    const dayLabel = isSameDay(start, now) ? 'Today' : formatDate(start);
+    const timeStr  = formatTime(start);
+    const slot     = `${dayLabel} ${timeStr} • ${mins} min`;
+
+    // Advance cursor
+    cursor = new Date(end.getTime() + GAP * 60000);
+
+    return { block, scheduledAt: start, slot, energy: energyForDuration(mins) };
+  });
+}
+
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+      && a.getMonth()    === b.getMonth()
+      && a.getDate()     === b.getDate();
+}
+function formatDate(d) {
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function formatTime(d) {
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+function energyForDuration(mins) {
+  if (mins <= 20) return 'low';
+  if (mins <= 45) return 'neutral';
+  return 'charged';
+}
+
+// ── Scheduling Panel ──────────────────────────────────────────
+let scheduleItems = []; // [{block, scheduledAt, slot, energy, approved}]
+
+function openSchedulePanel() {
+  scheduleItems = computeSchedule().map(item => ({ ...item, approved: item.block.confirmed }));
+  renderSchedulePanel();
+
+  const panel = document.getElementById('schedule-panel');
+  panel.classList.add('open');
+
+  jarvisSpeak("I've analyzed your tasks and scheduled them based on your available energy. Review your schedule below.");
+}
+
+function closeSchedulePanel() {
+  const panel = document.getElementById('schedule-panel');
+  panel.classList.remove('open');
+}
+
+function renderSchedulePanel() {
+  const list = document.getElementById('schedule-list');
+  list.innerHTML = '';
+
+  if (scheduleItems.length === 0) {
+    list.innerHTML = '<div class="empty-hint">// no tasks to schedule</div>';
+    return;
+  }
+
+  scheduleItems.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'schedule-card' + (item.approved ? ' approved' : '');
+    card.dataset.idx = idx;
+
+    const dateVal = item.scheduledAt.toISOString().slice(0, 10);
+    const timeVal = item.scheduledAt.toTimeString().slice(0, 5);
+
+    card.innerHTML = `
+      <button class="schedule-check" onclick="toggleApprove(${idx})" title="Approve">${item.approved ? '✓' : ''}</button>
+      <div class="schedule-card-body">
+        <div class="schedule-task-name">${escHtml(item.block.text)}</div>
+        <div class="schedule-time-slot" id="slot-text-${idx}">${item.slot}</div>
+        <div class="energy-dot ${item.energy}">${item.energy.charAt(0).toUpperCase() + item.energy.slice(1)} energy</div>
+        <div class="time-picker" id="tp-${idx}">
+          <input type="date"  id="tp-date-${idx}" value="${dateVal}" onchange="updateScheduleTime(${idx})">
+          <input type="time"  id="tp-time-${idx}" value="${timeVal}" onchange="updateScheduleTime(${idx})">
+        </div>
+      </div>
+      <button class="edit-btn" onclick="toggleTimePicker(${idx})" title="Edit time">✏️</button>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function toggleApprove(idx) {
+  scheduleItems[idx].approved = !scheduleItems[idx].approved;
+  if (scheduleItems[idx].approved) {
+    scheduleItems[idx].block.confirmed = true;
+    scheduleReminder(scheduleItems[idx].block, scheduleItems[idx].scheduledAt);
+  }
+  renderSchedulePanel();
+}
+
+function toggleTimePicker(idx) {
+  const tp = document.getElementById(`tp-${idx}`);
+  if (tp) tp.classList.toggle('open');
+}
+
+function updateScheduleTime(idx) {
+  const dateEl = document.getElementById(`tp-date-${idx}`);
+  const timeEl = document.getElementById(`tp-time-${idx}`);
+  if (!dateEl || !timeEl) return;
+  const newDt = new Date(`${dateEl.value}T${timeEl.value}`);
+  if (!isNaN(newDt)) {
+    scheduleItems[idx].scheduledAt = newDt;
+    scheduleItems[idx].slot = `${formatDate(newDt)} ${formatTime(newDt)} • ${scheduleItems[idx].block.minutes} min`;
+    const slotText = document.getElementById(`slot-text-${idx}`);
+    if (slotText) slotText.textContent = scheduleItems[idx].slot;
+  }
+}
+
+function confirmAllTasks() {
+  scheduleItems.forEach((item, idx) => {
+    item.approved = true;
+    item.block.confirmed = true;
+    scheduleReminder(item.block, item.scheduledAt);
+  });
+  renderSchedulePanel();
+  // Refresh blocks list to show confirmed state
   const list = document.getElementById('blocks-list');
   list.innerHTML = '';
   priorityBlocks.forEach(block => {
     const el = createBlockElement(block);
     list.appendChild(el);
-    attachDragEvents(el);
+    attachBlockEvents(el, block);
   });
 
-  // FIX 6: Show energy + calendar copy
-  const energyLabels = { low: 'low', neutral: 'moderate', charged: 'high' };
-  const energyWord = energyLabels[energyLevel] || energyLevel || 'your current';
-  const calMsg = document.getElementById('calendar-msg');
-  calMsg.innerHTML = `These will be scheduled into your available time slots based on your <strong>${energyWord}</strong> energy. Calendar sync coming soon — for now, your top priorities are locked in. ✦`;
-  calMsg.classList.add('visible');
-
-  // Hide the create button after use
-  document.getElementById('create-blocks-btn').classList.remove('visible');
-
-  // Scroll to top of priority area
-  document.getElementById('priority-area').scrollIntoView({ behavior: 'smooth' });
+  jarvisSpeak("All tasks confirmed. I'll remind you when it's time.");
+  setTimeout(closeSchedulePanel, 1800);
 }
 
-// ── Reminders ──────────────────────────────────────────
+// ── Reminders ─────────────────────────────────────────────────
 function requestNotificationPermission() {
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
   }
 }
 
-function scheduleReminder(block) {
-  const delay = block.scheduledAt - Date.now();
+function scheduleReminder(block, scheduledAt) {
+  if (reminderTimers[block.id]) {
+    clearTimeout(reminderTimers[block.id].timerId);
+    clearInterval(reminderTimers[block.id].loopInterval);
+  }
+  const delay = scheduledAt - Date.now();
   if (delay < 0) return;
   const timerId = setTimeout(() => fireReminder(block), delay);
   reminderTimers[block.id] = { timerId, loopInterval: null };
@@ -1706,11 +2156,13 @@ function clearReminderFor(id) {
 
 function fireReminder(block) {
   currentReminderTask = block;
-  showReminderModal(block);
-  playChimeThenSpeak(block.text);
+  document.getElementById('modal-task-text').textContent = block.text;
+  document.getElementById('reminder-modal').classList.add('visible');
+  playChimeThenSpeak(`Attention. ${block.text} is scheduled for now. Shall I proceed?`);
+
   const loopInterval = setInterval(() => {
     if (document.getElementById('reminder-modal').classList.contains('visible')) {
-      playChimeThenSpeak(block.text);
+      playChimeThenSpeak(`Attention. ${block.text} is scheduled for now. Shall I proceed?`);
     } else {
       clearInterval(loopInterval);
     }
@@ -1718,64 +2170,39 @@ function fireReminder(block) {
   if (reminderTimers[block.id]) reminderTimers[block.id].loopInterval = loopInterval;
 
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('VoiceMind 🔔', {
-      body: block.text,
-      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="28" font-size="28">🔔</text></svg>'
-    });
+    new Notification('VoiceMind ⬡', { body: block.text });
   }
 }
 
-// ── Web Audio Chime ────────────────────────────────────
+// ── Web Audio Chime ────────────────────────────────────────────
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
 
-function playChimeThenSpeak(taskText) {
+function playChimeThenSpeak(text) {
   try {
-    const ctx = getAudioCtx();
-    const freqs = [528, 660, 792];
-    const masterGain = ctx.createGain();
-    masterGain.connect(ctx.destination);
-    masterGain.gain.setValueAtTime(0.18, ctx.currentTime);
-    masterGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
-    freqs.forEach((freq, i) => {
+    const ctx  = getAudioCtx();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.4);
+    [528, 660, 792].forEach((freq, i) => {
       const osc = ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      osc.connect(masterGain);
+      osc.connect(gain);
       osc.start(ctx.currentTime + i * 0.08);
-      osc.stop(ctx.currentTime + 1.6);
+      osc.stop(ctx.currentTime + 1.5);
     });
-    setTimeout(() => speakReminder(taskText), 1600);
+    setTimeout(() => jarvisSpeak(text), 1500);
   } catch(e) {
-    speakReminder(taskText);
+    jarvisSpeak(text);
   }
 }
 
-function speakReminder(taskText) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(
-    `Hey, just a gentle nudge — ${taskText} is up next. You've got this.`
-  );
-  utterance.rate  = 0.88;
-  utterance.pitch = 1.05;
-  utterance.volume = 0.9;
-  const voices = window.speechSynthesis.getVoices();
-  const warm = voices.find(v => /samantha|karen|victoria|female|woman/i.test(v.name))
-            || voices.find(v => v.lang.startsWith('en'));
-  if (warm) utterance.voice = warm;
-  window.speechSynthesis.speak(utterance);
-}
-
-// ── Reminder Modal ─────────────────────────────────────
-function showReminderModal(block) {
-  document.getElementById('modal-task-text').textContent = block.text;
-  document.getElementById('reminder-modal').classList.add('visible');
-}
-
+// ── Reminder Modal ─────────────────────────────────────────────
 function handleModalAction(action) {
   const modal = document.getElementById('reminder-modal');
   const block = currentReminderTask;
@@ -1788,51 +2215,44 @@ function handleModalAction(action) {
     modal.classList.remove('visible');
   } else if (action === 'snooze') {
     modal.classList.remove('visible');
-    if (block) {
-      block.scheduledAt = Date.now() + 15 * 60000;
-      scheduleReminder(block);
-    }
+    if (block) scheduleReminder(block, new Date(Date.now() + 15 * 60000));
   } else if (action === 'reschedule') {
     modal.classList.remove('visible');
-    if (block) {
-      block.scheduledAt = Date.now() + 60 * 60000;
-      scheduleReminder(block);
-    }
+    if (block) scheduleReminder(block, new Date(Date.now() + 60 * 60000));
   }
 }
 
-// ── Utilities ──────────────────────────────────────────
+// ── Utilities ──────────────────────────────────────────────────
 function escHtml(str) {
   return str
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-// Keyboard shortcut: Space to toggle recording
+// ── Keyboard Shortcuts ─────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+  if (e.code === 'Space' && e.target.tagName !== 'BUTTON'
+      && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
     e.preventDefault();
     if (!isRecording) {
-      document.getElementById('mic-btn').dispatchEvent(new MouseEvent('mousedown'));
+      document.getElementById('mic-btn').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     }
+  }
+  if (e.key === 'Escape') {
+    closeSchedulePanel();
   }
 });
 document.addEventListener('keyup', e => {
-  if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+  if (e.code === 'Space' && e.target.tagName !== 'BUTTON'
+      && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
     e.preventDefault();
     if (isRecording) {
-      document.getElementById('mic-btn').dispatchEvent(new MouseEvent('mouseup'));
+      document.getElementById('mic-btn').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     }
   }
 });
-
-if (window.speechSynthesis) {
-  window.speechSynthesis.onvoiceschanged = () => {
-    window.speechSynthesis.getVoices();
-  };
-}
 </script>
 <script>
 /* === components/convos-collapse/component.js === */
