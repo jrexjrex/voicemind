@@ -962,6 +962,7 @@
     </select>
   </div>
   <button class="settings-save-btn" onclick="saveXaiSettings()" style="margin-top:10px;">Save xAI Settings</button>
+  <div id="xai-status-msg" style="margin-top:8px;font-size:12px;color:#ff7f7f;display:none;"></div>
 
   <button class="settings-close-btn" onclick="closeSettingsDrawer()">Close</button>
 </div>
@@ -1098,32 +1099,56 @@ function xaiSpeak(text, onEnd) {
   const xaiKey = localStorage.getItem('xai_api_key');
   const xaiVoice = localStorage.getItem('xai_voice_id') || 'aurora';
 
+  console.log('[xaiSpeak] called, key present:', !!xaiKey, 'voice:', xaiVoice);
+
   if (xaiKey) {
+    const requestBody = {
+      model: 'grok-2-aurora',
+      input: text,
+      voice: xaiVoice
+    };
+    console.log('[xaiSpeak] sending request to xAI TTS, body:', JSON.stringify(requestBody));
     fetch('https://api.x.ai/v1/audio/speech', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + xaiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: 'grok-2-aurora',
-        input: text,
-        voice: xaiVoice
-      })
+      body: JSON.stringify(requestBody)
     })
     .then(res => {
+      console.log('[xaiSpeak] response status:', res.status, res.ok);
       if (!res.ok) throw new Error('xAI ' + res.status);
       return res.blob();
     })
     .then(blob => {
+      console.log('[xaiSpeak] got audio blob, size:', blob.size, 'type:', blob.type);
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
-      audio.onerror = () => { URL.revokeObjectURL(url); fallbackSpeak(text, onEnd); };
-      audio.play().catch(() => fallbackSpeak(text, onEnd));
+      audio.onerror = (e) => {
+        console.error('[xaiSpeak] audio playback error:', e);
+        URL.revokeObjectURL(url);
+        fallbackSpeak(text, onEnd);
+      };
+      audio.play().catch((e) => {
+        console.error('[xaiSpeak] audio.play() failed:', e);
+        fallbackSpeak(text, onEnd);
+      });
     })
-    .catch(() => fallbackSpeak(text, onEnd));
+    .catch((err) => {
+      console.error('[xaiSpeak] fetch/processing error:', err);
+      // Show error feedback in settings drawer if open
+      const xaiMsg = document.getElementById('xai-status-msg');
+      if (xaiMsg) {
+        xaiMsg.textContent = '⚠️ xAI voice: check your API key';
+        xaiMsg.style.display = 'block';
+        setTimeout(() => { xaiMsg.style.display = 'none'; }, 6000);
+      }
+      fallbackSpeak(text, onEnd);
+    });
   } else {
+    console.log('[xaiSpeak] no xAI key, using fallback TTS');
     fallbackSpeak(text, onEnd);
   }
 }
@@ -2075,13 +2100,23 @@ function escHtml(str) {
 function openSettingsDrawer() {
   document.getElementById('settings-drawer').classList.add('open');
   document.getElementById('settings-overlay').classList.add('open');
-  // Populate current values
+  // Populate ElevenLabs values
   const savedKey = localStorage.getItem('el_api_key') || '';
   const savedVoice = localStorage.getItem('el_voice_id') || 'pNInz6obpgDQGcFmaJgB';
   const keyInput = document.getElementById('el-api-key');
   const voiceInput = document.getElementById('el-voice-id');
   if (keyInput) keyInput.value = savedKey;
   if (voiceInput) voiceInput.value = savedVoice;
+  // Populate xAI values
+  const savedXaiKey = localStorage.getItem('xai_api_key') || '';
+  const savedXaiVoice = localStorage.getItem('xai_voice_id') || 'aurora';
+  const xaiKeyInput = document.getElementById('xai-api-key');
+  const xaiVoiceInput = document.getElementById('xai-voice-id');
+  if (xaiKeyInput) xaiKeyInput.value = savedXaiKey;
+  if (xaiVoiceInput) xaiVoiceInput.value = savedXaiVoice;
+  // Hide any previous xAI status message
+  const xaiMsg = document.getElementById('xai-status-msg');
+  if (xaiMsg) { xaiMsg.style.display = 'none'; xaiMsg.textContent = ''; }
 }
 
 function closeSettingsDrawer() {
