@@ -1,10 +1,637 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="viewport" content="width=393, initial-scale=1, minimum-scale=1, maximum-scale=1">
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VoiceMind — JARVIS Edition</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* === Canonical convos-page CSS — runtime-injected === */
+/* convos-page — outermost frame.
+ *
+ * Universal layer: design tokens at :root, body reset, and the few
+ * utilities that span multiple components (.data-table* shell,
+ * .avatar palette). Always loaded before any other component CSS.
+ */
+
+/* ── DESIGN.md tokens, light mode (canonical) ────────────────── */
+:root {
+  --color-primary:    #000000;
+  --color-inverted:   #FFFFFF;
+  --color-secondary:  #666666;
+  --color-tertiary:   #B2B2B2;
+  --color-surface:    #FFFFFF;
+  --color-muted:      #F5F5F5;
+  --color-edge:       #EBEBEB;
+  --color-accent:     #FC4F37;
+  --color-success:    #16A34A;
+  --color-success-bright: #68D236;
+  --color-caution:    #E30C00;
+  /* Semantic state tokens — used for any "good / partial / inactive"
+   * visual feedback (Wordle-style game tiles, checklist progress, key
+   * states on the on-screen keyboard, etc.). `caution` is destructive
+   * red; `warn` is amber for "almost / in-progress / partial credit".
+   * `disabled-bg/text` give a neutral fill for used-up / declined
+   * elements that should still read as "actioned" (vs `muted` which
+   * is just the page gutter color). */
+  --color-warn:           #D97706;
+  --color-disabled-bg:    #D1D1D1;
+  --color-disabled-text:  #FFFFFF;
+
+  --rounded-sm:  8px;
+  --rounded-md:  12px;
+  --rounded-lg:  16px;
+  --rounded-xl:  24px;
+  --rounded-xxl: 40px;
+  --rounded-full: 9999px;
+
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-xxl: 48px;
+
+  --font-system: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:   ui-monospace, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace;
+
+  --note-column-max: 720px;
+}
+
+/* ── Dark-mode inversion ─────────────────────────────────────── */
+/* OS-preference dark — skipped when <html> is pinned via data-theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary:   #FFFFFF;
+    --color-inverted:  #000000;
+    --color-secondary: #999999;
+    --color-tertiary:  #4D4D4D;
+    --color-surface:   #262626;
+    --color-muted:     #333333;
+    --color-edge:      #333333;
+    /* Disabled fill brightens slightly in dark so the state is still
+     * visible against the deeper page bg; warn stays close (the
+     * amber works in both modes). */
+    --color-warn:          #F59E0B;
+    --color-disabled-bg:   #4D4D4D;
+    --color-disabled-text: #FFFFFF;
+  }
+}
+/* Explicit-dark override — wins over OS preference. Pin via
+   <html data-theme="dark|light"> or the "convos-theme" postMessage. */
+:root[data-theme="dark"] {
+  --color-primary:   #FFFFFF;
+  --color-inverted:  #000000;
+  --color-secondary: #999999;
+  --color-tertiary:  #4D4D4D;
+  --color-surface:   #262626;
+  --color-muted:     #333333;
+  --color-edge:      #333333;
+  --color-warn:          #F59E0B;
+  --color-disabled-bg:   #4D4D4D;
+  --color-disabled-text: #FFFFFF;
+}
+
+/* ── Reset + page ────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: clip;
+}
+body {
+  background: var(--color-muted);
+  color: var(--color-primary);
+  font-family: var(--font-system);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ── Brand floor for bare elements ─────────────────────────────── *
+ * These BARE-ELEMENT defaults mirror the <convos-note> body styling
+ * so a Tier-3 free-form artifact — which the runtime injects this CSS
+ * in front of — inherits Convos typography, the accent link color,
+ * mono code, and token-driven spacing WITHOUT the agent styling every
+ * tag. They're deliberately low-specificity: every component scopes
+ * its own headings/links under `.cv-*` class selectors (e.g.
+ * `.cv-note__body h2`), which outrank a bare `h2`, so these rules
+ * NEVER touch component-built artifacts — they only fill in for
+ * free-form HTML. The agent's own <style> (injected after this) wins
+ * on ties, so it can still override anything. */
+h1, h2, h3, h4, h5, h6 {
+  margin: var(--space-lg) 0 var(--space-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-primary);
+}
+h1 { font-size: 1.75rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; margin: var(--space-md) 0 var(--space-xs); line-height: 1.3; }
+h4 { font-size: 1.0625rem; margin: var(--space-md) 0 var(--space-xs); }
+h5, h6 { font-size: 0.9375rem; margin: var(--space-md) 0 var(--space-xs); }
+p { margin: 0 0 var(--space-md); }
+ul, ol { margin: 0 0 var(--space-md); padding-left: var(--space-lg); }
+li + li { margin-top: var(--space-xs); }
+a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+strong, b { font-weight: 600; }
+small { font-size: 0.875rem; color: var(--color-secondary); }
+code, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--color-surface);
+  padding: 2px 6px;
+  border-radius: var(--rounded-sm);
+}
+pre {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--rounded-md);
+  overflow-x: auto;
+}
+pre code { background: transparent; padding: 0; border-radius: 0; }
+blockquote {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-left: 2px solid var(--color-accent);
+  color: var(--color-secondary);
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--color-edge);
+  margin: var(--space-md) 0;
+}
+/* Native <table> (free-form bare element) — canonical spreadsheet look,
+   PLUS a horizontal-scroll box so a wide ledger (5-col expense table, etc.)
+   SCROLLS instead of squashing/clipping at 393pt. `display: block` makes the
+   table its own scroll container; nowrap headers keep columns from
+   collapsing into each other. Component tables carry higher-specificity
+   rules (.data-table table / .cv-note__body table), so this only fills in
+   for hand-authored free-form tables — agents should reach for a native
+   <table> here rather than hand-rolling a CSS-grid table. */
+table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* No border-collapse — it's ignored on a display:block table. Cells carry
+     a bottom-only border, so separate layout still renders clean single
+     hairlines (no doubling). */
+  font-size: 0.875rem;
+  margin: 0 0 var(--space-md);
+}
+th, td {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-edge);
+}
+th {
+  font-weight: 600;
+  color: var(--color-secondary);
+  white-space: nowrap;
+}
+
+/* ── Data-table shell — shared by leaderboard / scoreboard /
+   matches / specs / timeline / checklist. Each component owns its
+   row markup (.score-row, .game-row, .match-row, .data-card,
+   .timeline-row); the shell provides the flex column + header gap.
+   Components ship without surface chrome — wrap in <convos-card>
+   for background/border/padding. */
+.data-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.data-table-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-edge);
+}
+.data-table-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.data-table-meta {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--color-secondary);
+}
+/* Wide native <table> children scroll within the card edge. Grid-
+   based row patterns wrap cleanly and are unaffected. */
+.data-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Native <table> spreadsheet styling — uppercase header, primary
+   text on hairline rows. */
+.data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.data-table thead th {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-edge);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+}
+.data-table tbody td {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-edge);
+  color: var(--color-primary);
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ── Avatar — 40px circle, shared by leaderboard + matches.
+     <span class="avatar avatar-mono">SC</span>   — mono placeholder (primary bg + inverted text, theme-inverts in dark)
+     <span class="avatar avatar-mint">SC</span>   — pastel variant (rose / warm / mint / lilac / sky)
+     <img class="avatar" src="…" alt="…">         — real profile image (preferred when available) */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--rounded-full);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--color-muted);
+  color: var(--color-primary);
+  overflow: hidden;
+}
+img.avatar {
+  object-fit: cover;
+  object-position: center;
+}
+.avatar-mono  { background: var(--color-primary); color: var(--color-inverted); }
+.avatar-rose  { background: #FCD9D9; color: #A82929; }
+.avatar-warm  { background: #FFE2C9; color: #9F4F0E; }
+.avatar-mint  { background: #D6F3DD; color: #2A6E48; }
+.avatar-lilac { background: #E8DEF8; color: #5C4690; }
+.avatar-sky   { background: #D6E8FA; color: #1F4F9B; }
+/* Dark variants — OS-dark UNLESS the page is pinned light, plus an explicit
+   data-theme="dark" block, mirroring the token blocks above so a pinned
+   theme wins over the OS preference (without the guard, a pinned-light
+   artifact on a dark-OS device gets dark avatars on light tokens). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .avatar-rose  { background: #4A1F1F; color: #F0B5B5; }
+  :root:not([data-theme="light"]) .avatar-warm  { background: #4A2D14; color: #F5C9A1; }
+  :root:not([data-theme="light"]) .avatar-mint  { background: #1F3A28; color: #B5E3C2; }
+  :root:not([data-theme="light"]) .avatar-lilac { background: #2D2247; color: #D2BFFC; }
+  :root:not([data-theme="light"]) .avatar-sky   { background: #1A2D45; color: #B4D4F5; }
+}
+:root[data-theme="dark"] .avatar-rose  { background: #4A1F1F; color: #F0B5B5; }
+:root[data-theme="dark"] .avatar-warm  { background: #4A2D14; color: #F5C9A1; }
+:root[data-theme="dark"] .avatar-mint  { background: #1F3A28; color: #B5E3C2; }
+:root[data-theme="dark"] .avatar-lilac { background: #2D2247; color: #D2BFFC; }
+:root[data-theme="dark"] .avatar-sky   { background: #1A2D45; color: #B4D4F5; }
+
+/* ── Animation utilities ─────────────────────────────────────── *
+ * Applied via class: pop (tap/input), flip (reveal), shake (error),
+ * bounce (success). Re-trigger by removing + reflowing
+ * (`void el.offsetWidth`) + re-adding the class. Reduced-motion
+ * collapses to instant. */
+.cv-anim-pop    { animation: cv-anim-pop    0.1s ease; }
+.cv-anim-flip   { animation: cv-anim-flip   0.5s ease forwards; }
+.cv-anim-shake  { animation: cv-anim-shake  0.4s ease; }
+.cv-anim-bounce { animation: cv-anim-bounce 0.4s ease; }
+
+@keyframes cv-anim-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+@keyframes cv-anim-flip {
+  0%   { transform: rotateX(0deg); }
+  50%  { transform: rotateX(-90deg); }
+  100% { transform: rotateX(0deg); }
+}
+@keyframes cv-anim-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+@keyframes cv-anim-bounce {
+  0%, 100% { transform: translateY(0); }
+  40%      { transform: translateY(-12px); }
+  70%      { transform: translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cv-anim-pop,
+  .cv-anim-flip,
+  .cv-anim-shake,
+  .cv-anim-bounce {
+    animation: none;
+  }
+}
+
+/* ── <convos-page> element rules ───────────────────────────── */
+
+convos-page {
+  display: block;
+}
+
+/* Page without a Note/deck/gallery root gets a 16pt gutter so the
+   auto-wrapped card doesn't kiss the viewport edge. */
+convos-page:not(:has(> :is(article.cv-note, convos-deck, convos-gallery))) {
+  padding: var(--space-md);
+  display: block;
+}
+/* Self-chromed embeds (streak/poll/squad/countdown — they paint
+   their own saturated cell chrome) opt OUT of the gutter so the
+   embed's edge-to-edge fill reaches the page boundary instead of
+   sitting inside a doubled gap. Kept as a SEPARATE rule so its
+   specificity matches the rule above — without this, chaining a
+   second `:not(:has(...))` would beat the Small Thing's
+   `html[data-convos-surface="small"] convos-page { padding: 0 }`
+   override and leak the gutter back into 160×160 cells. */
+convos-page:has(> .cv-card > .cv-card__content > :is(.cv-squad, .cv-streak, .cv-poll, .cv-countdown)) {
+  padding: 0;
+}
+
+/* Deck and gallery at root are full-bleed — html → body → page chain
+   anchored to 100% so the deck fills the WebView reliably on iOS. */
+html:has(body > convos-page > :is(convos-deck, convos-gallery)),
+body:has(> convos-page > :is(convos-deck, convos-gallery)) {
+  height: 100%;
+  min-height: 100dvh;
+}
+convos-page:has(> :is(convos-deck, convos-gallery)) {
+  display: block;
+  padding: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #0B0F1A;
+}
+convos-page:has(> :is(convos-deck, convos-gallery)) > :is(convos-deck, convos-gallery) {
+  height: 100%;
+}
+
+/* Larger viewports get a centered, readable column matching the
+   Note width. Deck is exempt — stays full-bleed at every size. */
+@media (min-width: 720px) {
+  convos-page:not(:has(> convos-deck)) {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+}
+
+/* ── Small Thing surface — 160×160 watch face ────────────────── *
+ * The chat cell renders a snapshot of the artifact at 160×160 with
+ * the title shown as a caption OUTSIDE the visual canvas. The
+ * artifact's job here is to expose the most immediately useful slice
+ * of itself — content-forward, not an app icon.
+ *
+ * Foundation rules established here, inherited by every component:
+ *   - 160×160 fixed canvas (both ceiling AND floor — fill it)
+ *   - 16pt safe area inset padding on all edges (inner box = 128×128)
+ *   - In-canvas titles hidden (chat cell renders the title)
+ *   - convos-card chrome neutralized (no rounded corners / borders /
+ *     background — the chat cell IS the chrome)
+ *   - Light + dark via `prefers-color-scheme`, driven by the host
+ *     theme passed in as `overrideUserInterfaceStyle`
+ *
+ * Per-component Small Thing layouts (Phase 2) author CONTENT only —
+ * the frame, safe area, theme, and tap-area handling come from here.
+ * See SMALL-THINGS.md for the design rules. */
+html[data-convos-surface="small"] {
+  height: 160px;
+  overflow: hidden;
+}
+[data-convos-surface="small"] body {
+  margin: 0;
+  padding: 0;
+  height: 160px;
+  width: 160px;
+  overflow: hidden;
+}
+/* `html` prefix matches specificity of the base rule
+   `convos-page:not(:has(> :is(article.cv-note, …)))` which is (0,1,2)
+   — without the prefix this would lose the cascade and convos-page
+   would inherit the full-sheet 16pt padding ON TOP of the
+   component's own safe area, yielding 32pt of inset content. */
+html[data-convos-surface="small"] convos-page {
+  margin: 0;
+  max-width: none;
+  height: 160px;
+  width: 160px;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: block;
+  /* Position context for absolutely-placed full-bleed backgrounds
+     (banner images, accent fills) and corner-positioned metadata. */
+  position: relative;
+  /* The Small Thing surface puts the safe area on the COMPONENT,
+     not on convos-page. Zero out the full-sheet base padding. */
+  padding: 0;
+  /* Safe area is a TOKEN, not enforced padding. Backgrounds bleed
+     to the edge of the 160×160 canvas; foreground content respects
+     `padding: var(--small-inset)` (or `top/left/right/bottom:
+     var(--small-inset)` for corner-positioned elements). Per-component
+     Small Thing CSS opts foreground containers in. */
+  --small-inset: 16px;
+}
+[data-convos-surface="small"] convos-page > .cv-card,
+[data-convos-surface="small"] convos-page > convos-page > .cv-card {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  display: block;
+}
+/* Per-component cell roots — zero their own border-radius at the
+   Small Thing surface. The iOS chat-cell bubble (convos-ios PR #878,
+   `HTMLAttachmentBubble.Constant.cornerRadius = 20.0`) clips the
+   rendered HTML to 20pt rounded corners; any internal radius < 20
+   leaves a visible "shoulder" between the HTML corners and the iOS
+   clip. Zero them so the iOS bubble owns the corners. */
+[data-convos-surface="small"] convos-streak,
+[data-convos-surface="small"] convos-poll,
+[data-convos-surface="small"] convos-squad,
+[data-convos-surface="small"] convos-team {
+  border-radius: 0;
+}
+[data-convos-surface="small"] convos-page > .cv-card > .cv-card__content {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+/* Universal UA-margin reset for figure-based component roots. Most
+   components expand to `<figure class="cv-{name}">` and the UA
+   stylesheet ships `figure { margin: 1em 40px }` — at the Small
+   Thing surface that leaves the cell's brand-fill background inset
+   from the canvas, making content read as off-center even when
+   it's centered in its own box. Zeroing here covers every component
+   in one place. */
+[data-convos-surface="small"] figure {
+  margin: 0;
+}
+/* Component root stretches to fill the inner safe-area box. */
+[data-convos-surface="small"] convos-page > .cv-card > .cv-card__content > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* In-canvas titles are hidden at the Small Thing surface — the chat
+   cell renders the artifact title as a caption outside the canvas.
+   Components needing a Small-Thing-specific headline introduce a
+   different element (e.g. `.cv-{name}__small-headline`); the default
+   `__title` element is suppressed everywhere.
+
+   Both vocabularies covered:
+   - per-component BEM titles (`.cv-{name}__title`)
+   - shared data-table family titles + meta (used by leaderboard,
+     scoreboard, matches, specs, timeline, checklist, roadmap, steps).
+   In both, the visible title duplicates the chat-cell caption. */
+[data-convos-surface="small"] [class$="__title"],
+[data-convos-surface="small"] .data-table-header,
+[data-convos-surface="small"] .data-table-title,
+[data-convos-surface="small"] .data-table-meta {
+  display: none;
+}
+
+/* Nav-family fallback — `<convos-tabs>`, `<convos-collapse>`,
+   `<convos-collapse-group>`, `<convos-filter>`, `<convos-compare>`,
+   `<convos-matrix>`, `<convos-keyboard>` aren't content shapes; they're
+   scaffolds. At 160×160 a tab strip / matrix grid / keyboard ring
+   would feel like an app icon (anti-goal). Default reduction is
+   first-child only — Phase 2 per-component small-surface CSS can
+   override with a smarter reduction (e.g. compare → "before" image
+   alone). This is the safety net so a nav-rooted artifact ships
+   *something* content-forward in the chat cell. */
+[data-convos-surface="small"] convos-tabs > convos-tab:not(:first-of-type),
+[data-convos-surface="small"] convos-collapse-group > convos-collapse:not(:first-of-type),
+[data-convos-surface="small"] convos-filter [class*="__chip"]:not(:first-of-type),
+[data-convos-surface="small"] convos-matrix .cv-matrix__option:not(:first-of-type),
+[data-convos-surface="small"] convos-keyboard [class*="__key"]:not(:first-of-type) {
+  display: none;
+}
+
+/* "+N more →" tail affordance — default styling for any component
+   that emits a `[class$="__more"]` element. Calm caption tier (small
+   regular-weight secondary text, no tracking, no upper-case) so the
+   affordance reads as a quiet pointer to the full sheet, not an
+   eyebrow. Per-component CSS overrides the position (bottom-right is
+   the canonical idiom; roadmap is top-right on its brand-fill cell;
+   scoreboard goes in-flow as its third row) but should NOT override
+   the typographic treatment — keep the read consistent across the
+   system. */
+[data-convos-surface="small"] [class$="__more"] {
+  display: block;
+  margin: auto 0 0;
+  padding: 0;
+  text-align: right;
+  font-size: 0.625rem;
+  font-weight: 400;
+  line-height: 1.18;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-secondary);
+  font-variant-numeric: tabular-nums;
+  border-top: 0;
+  opacity: 0.8;
+}
+
+/* ── Small-Thing tag pill (reusable) ─────────────────────────── *
+ * The canonical 160×160 chat-cell label — the same frosted-blur pill the
+ * Note uses for its tagline, exposed as a UTILITY so free-form artifacts
+ * get it without rebuilding one. Drop
+ *   <div class="cv-tag">🇯🇵 Japan expenses</div>
+ * anywhere in the artifact: hidden at the full sheet, pinned centered along
+ * the bottom of the chat cell at the Small Thing surface. It's anchored to
+ * the cell viewport (position: fixed), so it stays centered on the 160×160
+ * canvas no matter how deeply it's nested or what positioned ancestors wrap
+ * it. */
+.cv-tag { display: none; }
+[data-convos-surface="small"] .cv-tag {
+  display: inline-flex;
+  position: fixed;
+  left: 50%;
+  bottom: var(--small-inset);
+  transform: translateX(-50%);
+  z-index: 5;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: calc(100% - 2 * var(--small-inset));
+  margin: 0;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1.18;
+  color: var(--color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Dark mode: the frosted pill stays light, so flip the text to inverted
+   (dark) — var(--color-primary) is white in dark mode and would vanish. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [data-convos-surface="small"] .cv-tag {
+    background: rgba(255, 255, 255, 0.78);
+    color: var(--color-inverted);
+  }
+}
+:root[data-theme="dark"] [data-convos-surface="small"] .cv-tag {
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--color-inverted);
+}
+
+/* ── iOS contract (confirmed) ───────────────────────────────── *
+ * Chat-cell tile is 160×160 with a 20pt continuous corner radius
+ * (convos-ios PR #878, HTMLAttachmentBubble.Constant). The iOS
+ * thumbnail renderer ships with renderSize=480×480 (160pt @3x) +
+ * a `width=160, initial-scale=1` viewport WKUserScript +
+ * `data-convos-thumbnail="true"` stamped at .atDocumentStart so
+ * the runtime's surface-detection JS gates correctly on first
+ * paint. Our small-surface CSS targets this 160×160 contract
+ * directly. See SMALL-THINGS.md "iOS contract" for the full
+ * mapping. */
+
+</style>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -178,41 +805,13 @@
   }
   .energy-title p { color: var(--text-secondary); font-size: 0.95rem; font-weight: 300; }
 
-  .energy-buttons { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
-
-  .energy-btn {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 10px;
-    width: 150px; height: 165px;
-    border: 1px solid rgba(0,229,255,0.1);
-    border-radius: 20px;
-    background: rgba(26,27,65,0.7);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-family: inherit;
-    color: var(--text-primary);
-    position: relative; overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,229,255,0.06);
+  /* ── Energy Bar Wrapper ── */
+  #energy-bar-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
   }
-  .energy-btn::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(135deg, rgba(123,66,188,0.15), transparent);
-    opacity: 0; transition: opacity 0.3s;
-  }
-  .energy-btn:hover::before { opacity: 1; }
-  .energy-btn:hover {
-    border-color: rgba(0,229,255,0.3);
-    transform: translateY(-5px) scale(1.03);
-    box-shadow: 0 12px 36px rgba(0,229,255,0.15);
-  }
-  .energy-btn:active { transform: translateY(-1px) scale(1.01); }
-  .energy-btn .emoji { font-size: 2.6rem; }
-  .energy-btn .label { font-size: 0.95rem; font-weight: 600; }
-  .energy-btn .sub { font-size: 0.72rem; color: var(--text-secondary); }
 
   /* ── Main App Layout ── */
   #app {
@@ -747,8 +1346,76 @@
   @keyframes fadeOut  { from { opacity: 1; } to { opacity: 0; } }
 
   @media (max-width: 480px) {
-    .energy-btn { width: 126px; height: 148px; }
     .modal-card { padding: 26px 18px; }
+  }
+
+  /* ── Energy Bar Widget ── */
+  #energy-bar-track {
+    width: 52px;
+    height: 280px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 26px;
+    position: relative;
+    cursor: pointer;
+    touch-action: none;
+    margin: 0 auto;
+  }
+  #energy-bar-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 26px;
+    transition: height 0.1s ease, background 0.3s ease;
+  }
+  .energy-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -20px;
+    background: white;
+    border: 2px solid rgba(255,255,255,0.8);
+    pointer-events: none;
+  }
+  #energy-level-label {
+    font-size: 22px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 16px;
+    transition: color 0.3s ease;
+  }
+  #energy-confirm-btn {
+    background: linear-gradient(135deg, #F5C842, #d4a017);
+    color: #0d0e1f;
+    font-weight: 600;
+    border-radius: 50px;
+    padding: 14px 48px;
+    font-size: 16px;
+    box-shadow: 0 4px 20px rgba(245,200,66,0.4);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  #energy-confirm-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(245,200,66,0.55);
+  }
+  #energy-confirm-btn:active {
+    transform: translateY(0);
+  }
+  .energy-bar-sublabel {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+    text-align: center;
+    margin-bottom: 24px;
+    opacity: 0.7;
   }
 
   /* ── Settings Gear ── */
@@ -814,6 +1481,69 @@
   }
   .settings-overlay.open { display: block; }
 </style>
+<script>
+(function () {
+  var root = document.documentElement;
+  if (!root.hasAttribute('data-theme')) root.setAttribute('data-theme', 'auto');
+
+  // Surface detection — keep this the FIRST thing so component CSS
+  // can pick up the right layout on initial paint. Re-runs on resize
+  // in case the iOS sheet detent changes mid-session.
+  //
+  // Two attributes:
+  //   data-convos-surface="small" — set whenever the artifact is
+  //     rendering into a Small Thing surface (HTMLThumbnailRenderer
+  //     OR starterpack iframe). Component CSS gates Small-Thing rules
+  //     on this attribute.
+  //   data-convos-thumbnail="true" — set when the host explicitly
+  //     declares "this is a thumbnail render." iOS's
+  //     HTMLThumbnailRenderer stamps it at .atDocumentStart via
+  //     WKUserScript; the heuristic below sets it as a fallback for
+  //     legacy iOS builds and any other host that doesn't stamp.
+  //
+  // Host-stamped attributes are AUTHORITATIVE — if iOS has already
+  // set data-convos-thumbnail="true" before this script runs, treat
+  // that as ground truth and never remove it (the innerHeight
+  // heuristic will fail once the renderer is at 160-aligned dims).
+  function detectSurface() {
+    var hostStampedThumbnail = root.getAttribute('data-convos-thumbnail') === 'true';
+    var h = window.innerHeight;
+    var inIframe = false;
+    try { inIframe = window.parent !== window; } catch (e) { inIframe = true; }
+    var isThumbnail = hostStampedThumbnail || h >= 900;
+    var isSmall = isThumbnail || (inIframe && h <= 700);
+    if (isSmall) {
+      if (root.getAttribute('data-convos-surface') !== 'small') {
+        root.setAttribute('data-convos-surface', 'small');
+      }
+    } else {
+      if (root.hasAttribute('data-convos-surface')) {
+        root.removeAttribute('data-convos-surface');
+      }
+    }
+    if (isThumbnail) {
+      if (root.getAttribute('data-convos-thumbnail') !== 'true') {
+        root.setAttribute('data-convos-thumbnail', 'true');
+      }
+    } else {
+      if (root.hasAttribute('data-convos-thumbnail')) {
+        root.removeAttribute('data-convos-thumbnail');
+      }
+    }
+  }
+  detectSurface();
+  window.addEventListener('resize', detectSurface);
+
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || d.type !== 'convos-theme') return;
+    var t = d.theme;
+    if (t === 'light' || t === 'dark' || t === 'auto') {
+      root.setAttribute('data-theme', t);
+    }
+  });
+})();
+</script>
 </head>
 <body>
 
@@ -834,22 +1564,19 @@
     </div>
     <p>// energy level assessment required</p>
   </div>
-  <div class="energy-buttons">
-    <button class="energy-btn" data-energy="low" onclick="setEnergy('low')">
-      <span class="emoji">🌑</span>
-      <span class="label">Low</span>
-      <span class="sub">Take it slow</span>
-    </button>
-    <button class="energy-btn" data-energy="neutral" onclick="setEnergy('neutral')">
-      <span class="emoji">🌤</span>
-      <span class="label">Neutral</span>
-      <span class="sub">Steady flow</span>
-    </button>
-    <button class="energy-btn" data-energy="charged" onclick="setEnergy('charged')">
-      <span class="emoji">⚡</span>
-      <span class="label">Charged</span>
-      <span class="sub">Full power</span>
-    </button>
+
+  <div id="energy-bar-wrapper">
+    <h2 style="font-size:1.25rem;font-weight:600;color:var(--text-primary);text-align:center;margin-bottom:6px;letter-spacing:-0.02em;">How's your energy right now?</h2>
+    <p class="energy-bar-sublabel">Hold and drag up to set</p>
+
+    <div id="energy-level-label">Neutral</div>
+
+    <div id="energy-bar-track">
+      <div id="energy-bar-fill"></div>
+      <div class="energy-thumb" id="energy-thumb"></div>
+    </div>
+
+    <button id="energy-confirm-btn" onclick="selectEnergy(energyBarLevel)">Energy</button>
   </div>
 </div>
 
@@ -909,6 +1636,22 @@
     </select>
   </div>
   <button class="settings-save-btn" onclick="saveSettings()">Save</button>
+
+  <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:16px 0;">
+
+  <div>
+    <div class="settings-label" style="font-weight:600;color:var(--text-primary);">xAI Voice (Grok)</div>
+    <input type="password" id="xai-api-key" class="settings-input" placeholder="Paste xAI API key" style="margin-top:8px;">
+  </div>
+  <div style="margin-top:10px;">
+    <div class="settings-label">xAI Voice</div>
+    <select id="xai-voice-id" class="settings-input">
+      <option value="aurora">Aurora</option>
+      <option value="default">Default</option>
+    </select>
+  </div>
+  <button class="settings-save-btn" onclick="saveXaiSettings()" style="margin-top:10px;">Save xAI Settings</button>
+
   <button class="settings-close-btn" onclick="closeSettingsDrawer()">Close</button>
 </div>
 
@@ -1031,6 +1774,40 @@ function jarvisSpeak(text, onEnd) {
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
+      audio.onerror = () => { URL.revokeObjectURL(url); xaiSpeak(text, onEnd); };
+      audio.play().catch(() => xaiSpeak(text, onEnd));
+    })
+    .catch(() => xaiSpeak(text, onEnd));
+  } else {
+    xaiSpeak(text, onEnd);
+  }
+}
+
+function xaiSpeak(text, onEnd) {
+  const xaiKey = localStorage.getItem('xai_api_key');
+  const xaiVoice = localStorage.getItem('xai_voice_id') || 'aurora';
+
+  if (xaiKey) {
+    fetch('https://api.x.ai/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + xaiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'grok-2-aurora',
+        input: text,
+        voice: xaiVoice
+      })
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('xAI ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
       audio.onerror = () => { URL.revokeObjectURL(url); fallbackSpeak(text, onEnd); };
       audio.play().catch(() => fallbackSpeak(text, onEnd));
     })
@@ -1086,6 +1863,137 @@ function setEnergy(level) {
   showApp();
 }
 
+// ── Energy Bar Widget ─────────────────────────────────────────
+let energyBarLevel = 2; // 1=Low, 2=Neutral, 3=Charged
+let energyBarFillPct = 50; // 0–100
+let energyBarDragging = false;
+
+function selectEnergy(level) {
+  const levelMap = { 1: 'low', 2: 'neutral', 3: 'charged' };
+  setEnergy(levelMap[level] || 'neutral');
+}
+
+function energyBarGetColor(pct) {
+  if (pct < 34) {
+    return {
+      gradient: 'linear-gradient(to top, #991b1b, #ef4444)',
+      glow: 'rgba(239,68,68,0.45)',
+      thumbGlow: '0 0 14px rgba(239,68,68,0.7)',
+      label: 'Low',
+      labelColor: '#ef4444'
+    };
+  } else if (pct < 67) {
+    return {
+      gradient: 'linear-gradient(to top, #854d0e, #eab308)',
+      glow: 'rgba(234,179,8,0.35)',
+      thumbGlow: '0 0 14px rgba(234,179,8,0.7)',
+      label: 'Neutral',
+      labelColor: '#eab308'
+    };
+  } else {
+    return {
+      gradient: 'linear-gradient(to top, #14532d, #22c55e)',
+      glow: 'rgba(34,197,94,0.35)',
+      thumbGlow: '0 0 14px rgba(34,197,94,0.7)',
+      label: 'Charged',
+      labelColor: '#22c55e'
+    };
+  }
+}
+
+function energyBarUpdate(pct) {
+  pct = Math.max(0, Math.min(100, pct));
+  energyBarFillPct = pct;
+  const fill = document.getElementById('energy-bar-fill');
+  const thumb = document.getElementById('energy-thumb');
+  const label = document.getElementById('energy-level-label');
+  if (!fill) return;
+  const color = energyBarGetColor(pct);
+  fill.style.height = pct + '%';
+  fill.style.background = color.gradient;
+  fill.style.boxShadow = '0 0 18px ' + color.glow;
+  if (thumb) {
+    // Position thumb at top of fill bar (bottom offset = fill height, thumb sits above it)
+    thumb.style.bottom = 'calc(' + pct + '% - 20px)';
+    thumb.style.top = 'auto';
+    thumb.style.boxShadow = color.thumbGlow;
+  }
+  if (label) {
+    label.textContent = color.label;
+    label.style.color = color.labelColor;
+  }
+  // Update energyBarLevel
+  if (pct < 34) energyBarLevel = 1;
+  else if (pct < 67) energyBarLevel = 2;
+  else energyBarLevel = 3;
+}
+
+function energyBarCalcPct(clientY) {
+  const track = document.getElementById('energy-bar-track');
+  if (!track) return energyBarFillPct;
+  const rect = track.getBoundingClientRect();
+  const trackBottom = rect.bottom;
+  const trackHeight = rect.height;
+  const pct = ((trackBottom - clientY) / trackHeight) * 100;
+  return Math.max(0, Math.min(100, pct));
+}
+
+function initEnergyBar() {
+  const track = document.getElementById('energy-bar-track');
+  if (!track) return;
+
+  // Set initial state: 50% neutral
+  energyBarUpdate(50);
+
+  // Touch events
+  track.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    energyBarDragging = true;
+    const touch = e.touches[0];
+    energyBarUpdate(energyBarCalcPct(touch.clientY));
+  }, { passive: false });
+
+  track.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!energyBarDragging) return;
+    const touch = e.touches[0];
+    energyBarUpdate(energyBarCalcPct(touch.clientY));
+  }, { passive: false });
+
+  track.addEventListener('touchend', function(e) {
+    energyBarDragging = false;
+  });
+
+  // Mouse events (desktop)
+  track.addEventListener('mousedown', function(e) {
+    energyBarDragging = true;
+    energyBarUpdate(energyBarCalcPct(e.clientY));
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!energyBarDragging) return;
+    energyBarUpdate(energyBarCalcPct(e.clientY));
+  });
+
+  document.addEventListener('mouseup', function() {
+    energyBarDragging = false;
+  });
+}
+
+// Initialize energy bar when DOM is ready
+(function() {
+  function tryInit() {
+    const track = document.getElementById('energy-bar-track');
+    if (track) { initEnergyBar(); }
+    else { setTimeout(tryInit, 50); }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryInit);
+  } else {
+    tryInit();
+  }
+})();
+
 function showApp() {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('mic-section').style.display = 'flex';
@@ -1098,11 +2006,18 @@ function showApp() {
   const voiceInput = document.getElementById('el-voice-id');
   if (keyInput) keyInput.value = savedKey;
   if (voiceInput) voiceInput.value = savedVoice;
+  // Pre-fill xAI settings
+  const savedXaiKey = localStorage.getItem('xai_api_key') || '';
+  const savedXaiVoice = localStorage.getItem('xai_voice_id') || 'aurora';
+  const xaiKeyInput = document.getElementById('xai-api-key');
+  const xaiVoiceInput = document.getElementById('xai-voice-id');
+  if (xaiKeyInput) xaiKeyInput.value = savedXaiKey;
+  if (xaiVoiceInput) xaiVoiceInput.value = savedXaiVoice;
   const labels = { low: '🌑 Low', neutral: '🌤 Neutral', charged: '⚡ Charged' };
   document.getElementById('energy-badge-text').textContent = labels[energyLevel] || energyLevel;
   // JARVIS greeting
   setTimeout(() => {
-    jarvisSpeak(`${getGreeting()}. What do you want or need to do?`);
+    jarvisSpeak(`${getGreeting()}. What do you want, or need to do?`);
   }, 600);
 }
 
@@ -1266,7 +2181,7 @@ function stopRecording(save) {
     if (cleaned) {
       const conf = pendingConfidence;
       addPriorityBlock(cleaned, conf);
-      jarvisSpeak("Understood. I'll process that.");
+      jarvisSpeak(`${cleaned}`);
     }
   }
 
@@ -1618,8 +2533,15 @@ function formatDate(d) {
   const yyyy = d.getFullYear();
   return `${mm}/${dd}/${yyyy}`;
 }
+function formatTime12h(date) {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
 function formatTime(d) {
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return formatTime12h(d);
 }
 function energyForDuration(mins) {
   if (mins <= 20) return 'low';
@@ -1869,6 +2791,19 @@ function saveSettings() {
   setJarvisStatus('// settings saved');
 }
 
+function saveXaiSettings() {
+  const xaiKey = (document.getElementById('xai-api-key').value || '').trim();
+  const xaiVoice = document.getElementById('xai-voice-id').value;
+  if (xaiKey) {
+    localStorage.setItem('xai_api_key', xaiKey);
+  } else {
+    localStorage.removeItem('xai_api_key');
+  }
+  localStorage.setItem('xai_voice_id', xaiVoice);
+  closeSettingsDrawer();
+  setJarvisStatus('// xAI settings saved');
+}
+
 // ── Keyboard Shortcuts ─────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && e.target.tagName !== 'BUTTON'
@@ -1891,6 +2826,1599 @@ document.addEventListener('keyup', e => {
     }
   }
 });
+</script>
+<script>
+/* === components/convos-collapse/component.js === */
+/* convos-collapse — disclosure widget
+ *
+ * Hydrates the <convos-collapse> custom element into a native
+ * <details>/<summary> structure on connect. The browser handles
+ * keyboard (Enter/Space toggles), aria-expanded, focus, and the
+ * [open] attribute — this module just wires the rendered DOM and
+ * keeps the host element's [open] attribute in sync with user
+ * interaction so authoring-time `open` and runtime state stay
+ * coherent.
+ *
+ * Light DOM only — never attachShadow().
+ * Session-local state — no localStorage / sessionStorage.
+ */
+
+class ConvosCollapse extends HTMLElement {
+  static get observedAttributes() {
+    return ["summary", "open"];
+  }
+
+  constructor() {
+    super();
+    this._hydrated = false;
+    this._details = null;
+    this._labelEl = null;
+    this._onToggle = this._onToggle.bind(this);
+  }
+
+  connectedCallback() {
+    if (this._hydrated) {
+      // Reconnect path: disconnectedCallback removed the toggle
+      // listener, so re-attach it here. Without this, after the
+      // element is moved in the DOM (e.g. appendChild), tapping
+      // the summary still expands the native <details> but the
+      // host's [open] attribute stops mirroring.
+      if (this._details) {
+        this._details.addEventListener("toggle", this._onToggle);
+      }
+      return;
+    }
+    // CRITICAL: connectedCallback fires DURING HTML parsing,
+    // when the parser has inserted <convos-collapse> but NOT yet
+    // its body content. Reading childNodes synchronously here
+    // returns an empty NodeList. Wait for DOMContentLoaded when
+    // the document is still loading.
+    if (document.readyState === "loading") {
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => this._hydrate(),
+        { once: true },
+      );
+    } else {
+      this._hydrate();
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._details) {
+      this._details.removeEventListener("toggle", this._onToggle);
+    }
+  }
+
+  attributeChangedCallback(name, _oldValue, newValue) {
+    if (!this._hydrated) return;
+    if (name === "summary" && this._labelEl) {
+      this._labelEl.textContent = newValue ?? "";
+    } else if (name === "open" && this._details) {
+      const shouldBeOpen = newValue !== null;
+      if (this._details.open !== shouldBeOpen) {
+        this._details.open = shouldBeOpen;
+      }
+    }
+  }
+
+  _hydrate() {
+    // Idempotency guard. _hydrated is set at the END of this method,
+    // so two distinct connectedCallback firings — each registering
+    // its own DOMContentLoaded listener — could both call _hydrate()
+    // before either one sets _hydrated=true. The second call would
+    // re-wrap the already-built <details> into a new <details> and
+    // corrupt the DOM. Belt-and-suspenders.
+    if (this._hydrated) return;
+
+    // Capture the slotted children before we wrap them — the
+    // custom element's existing children become the body content.
+    const bodyChildren = Array.from(this.childNodes);
+
+    const details = document.createElement("details");
+    details.className = "cv-collapse";
+    if (this.hasAttribute("open")) {
+      details.open = true;
+    }
+
+    const summary = document.createElement("summary");
+    summary.className = "cv-collapse__summary";
+
+    const chevron = document.createElement("span");
+    chevron.className = "cv-collapse__chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    // Right-pointing triangle; CSS rotates 90deg when [open].
+    chevron.textContent = "▸";
+
+    const label = document.createElement("span");
+    label.className = "cv-collapse__label";
+    label.textContent = this.getAttribute("summary") ?? "";
+
+    summary.append(chevron, label);
+
+    const body = document.createElement("div");
+    body.className = "cv-collapse__body";
+    for (const node of bodyChildren) {
+      body.appendChild(node);
+    }
+
+    details.append(summary, body);
+
+    // Replace the (now empty) custom element's children with the
+    // rendered structure. The custom element itself stays in the
+    // tree so component CSS targeting `convos-collapse` works.
+    this.appendChild(details);
+
+    details.addEventListener("toggle", this._onToggle);
+
+    // Mark the host as hydrated. Preview-mode CSS surfaces the
+    // `summary` attribute via ::before as a Quick Look fallback
+    // (where this JS doesn't run). When JS runs and renders a real
+    // <summary>, this class suppresses the duplicated fallback.
+    this.classList.add("cv-collapse--hydrated");
+
+    this._details = details;
+    this._labelEl = label;
+    this._hydrated = true;
+  }
+
+  _onToggle() {
+    if (!this._details) return;
+    // Mirror the rendered <details>'s open state onto the host's
+    // [open] attribute so external CSS / inspectors see the same
+    // truth. Use removeAttribute / setAttribute (no value) to keep
+    // it boolean-shaped.
+    if (this._details.open) {
+      if (!this.hasAttribute("open")) {
+        this.setAttribute("open", "");
+      }
+    } else if (this.hasAttribute("open")) {
+      this.removeAttribute("open");
+    }
+  }
+}
+
+if (!customElements.get("convos-collapse")) {
+  customElements.define("convos-collapse", ConvosCollapse);
+}
+
+</script>
+<script>
+/* === components/convos-collapse-group/component.js === */
+/* convos-collapse-group — title + list of disclosures
+ *
+ * A grouping wrapper for multiple <convos-collapse> children. Lets
+ * an FAQ / disclosure list ship as a single titled artifact instead
+ * of a stack of bare collapses on the page.
+ *
+ * Hydrates by building a header (optional title + meta) above the
+ * existing children. The children themselves stay <convos-collapse>
+ * elements — each one continues to self-hydrate via its own custom
+ * element. This wrapper does NOT manage open/close state across
+ * children; each disclosure remains independent.
+ *
+ * Light DOM only — never attachShadow().
+ * Session-local state — no localStorage / sessionStorage.
+ */
+
+class ConvosCollapseGroup extends HTMLElement {
+  static get observedAttributes() {
+    return ["title", "meta"];
+  }
+
+  constructor() {
+    super();
+    this._hydrated = false;
+    this._headerEl = null;
+    this._titleEl = null;
+    this._metaEl = null;
+  }
+
+  connectedCallback() {
+    if (this._hydrated) return;
+    // Same parser-timing concern as <convos-collapse>: this fires
+    // before the body's <convos-collapse> children are present in
+    // the DOM during initial parse. Defer to DOMContentLoaded so
+    // the children are queryable when we hydrate.
+    if (document.readyState === "loading") {
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => this._hydrate(),
+        { once: true },
+      );
+    } else {
+      this._hydrate();
+    }
+  }
+
+  attributeChangedCallback(name, _oldValue, newValue) {
+    if (!this._hydrated) return;
+    if (name === "title") {
+      if (this._titleEl) {
+        this._titleEl.textContent = newValue ?? "";
+      } else if (newValue) {
+        this._ensureHeader();
+        this._titleEl = document.createElement("p");
+        this._titleEl.className = "cv-collapse-group__title";
+        this._titleEl.textContent = newValue;
+        this._headerEl.insertBefore(this._titleEl, this._headerEl.firstChild);
+      }
+    } else if (name === "meta") {
+      if (this._metaEl) {
+        this._metaEl.textContent = newValue ?? "";
+      } else if (newValue) {
+        this._ensureHeader();
+        this._metaEl = document.createElement("p");
+        this._metaEl.className = "cv-collapse-group__meta";
+        this._metaEl.textContent = newValue;
+        this._headerEl.appendChild(this._metaEl);
+      }
+    }
+  }
+
+  _ensureHeader() {
+    if (this._headerEl) return;
+    this._headerEl = document.createElement("div");
+    this._headerEl.className = "cv-collapse-group__header";
+    // Header always lives at the top — before any <convos-collapse>
+    // child the agent authored.
+    this.insertBefore(this._headerEl, this.firstChild);
+  }
+
+  _hydrate() {
+    if (this._hydrated) return;
+    this.classList.add("cv-collapse-group");
+
+    const titleAttr = this.getAttribute("title");
+    const metaAttr = this.getAttribute("meta");
+    if (titleAttr || metaAttr) {
+      this._ensureHeader();
+      if (titleAttr) {
+        const t = document.createElement("p");
+        t.className = "cv-collapse-group__title";
+        t.textContent = titleAttr;
+        this._headerEl.appendChild(t);
+        this._titleEl = t;
+      }
+      if (metaAttr) {
+        const m = document.createElement("p");
+        m.className = "cv-collapse-group__meta";
+        m.textContent = metaAttr;
+        this._headerEl.appendChild(m);
+        this._metaEl = m;
+      }
+    }
+
+    this.dataset.hydrated = "true";
+    this._hydrated = true;
+  }
+}
+
+if (!customElements.get("convos-collapse-group")) {
+  customElements.define("convos-collapse-group", ConvosCollapseGroup);
+}
+
+</script>
+<script>
+/* === components/convos-compare/component.js === */
+/* convos-compare — before/after image slider with a draggable divider
+ *
+ * Light DOM (never attachShadow). Session-local state — no
+ * localStorage / sessionStorage / network calls.
+ *
+ * Hydration shape:
+ *   - Read attributes (before-src, after-src, before-alt, after-alt,
+ *     title, meta, before-label, after-label, start).
+ *   - Build the internal DOM: optional header, frame, two <img>s,
+ *     two corner labels, divider line, handle button.
+ *   - Bind pointer events on the frame for "drag or tap to set
+ *     divider position".
+ *   - Bind keyboard events on the handle for ArrowLeft/Right (1%),
+ *     Shift+Arrow (5%), Home/End (0/100).
+ *   - Maintain `--divider-pos` as a percentage on the host element;
+ *     CSS reads it for the clip-path and the divider/handle x.
+ *
+ * Why a single Pointer Events handler (not separate mouse/touch):
+ * Pointer Events normalizes mouse, touch, and stylus into one stream
+ * with consistent capture semantics. setPointerCapture on the frame
+ * means a finger that drags off the frame still keeps tracking, and
+ * we don't need parallel mousedown/touchstart trees with conflicting
+ * preventDefault rules. Supported on all iOS/Android WebViews we
+ * target (iOS 13+, Android Chrome 55+).
+ */
+
+(() => {
+  if (customElements.get("convos-compare")) return;
+
+  // SVG path for the handle icon: two horizontal arrows pointing
+  // outward, signalling "drag left or right". Drawn as strokes so
+  // currentColor handles light/dark.
+  const HANDLE_ICON_PATH =
+    "M10 8 6 12l4 4 M14 8l4 4-4 4 M6 12h12";
+
+  const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+  const parseStart = (raw) => {
+    if (raw == null) return 50;
+    const n = parseFloat(raw);
+    if (Number.isNaN(n)) return 50;
+    return clamp(n, 0, 100);
+  };
+
+  class ConvosCompare extends HTMLElement {
+    static get observedAttributes() {
+      return ["before-src", "after-src", "before-alt", "after-alt",
+              "before-label", "after-label", "title", "meta", "start"];
+    }
+
+    constructor() {
+      super();
+      this._hydrated = false;
+      this._pos = 50; // current divider position, 0–100
+
+      this._onPointerDown = this._onPointerDown.bind(this);
+      this._onPointerMove = this._onPointerMove.bind(this);
+      this._onPointerUp = this._onPointerUp.bind(this);
+      this._onKeydown = this._onKeydown.bind(this);
+    }
+
+    connectedCallback() {
+      if (this._hydrated) {
+        // Already-hydrated path: re-attach listeners that
+        // disconnectedCallback removed. Without this, a
+        // disconnect → reconnect (e.g. moved via appendChild)
+        // leaves the slider visually intact but silently broken
+        // — pointer + keyboard events stop firing.
+        this._bindFrameListeners();
+        return;
+      }
+      // Defer one microtask so any attributes set right after
+      // construction are visible to _hydrate.
+      queueMicrotask(() => this._hydrate());
+    }
+
+    disconnectedCallback() {
+      this._unbindFrameListeners();
+      // Reset drag state in case the element is disconnected mid-drag
+      // (e.g. moved via appendChild while the user is dragging). The
+      // pointerup/cancel listeners get removed by _unbindFrameListeners
+      // before they can fire, so without this reset _dragging stays
+      // true; on reconnect the reattached pointermove handler would
+      // erroneously update the divider position without a fresh
+      // pointerdown.
+      this._dragging = false;
+    }
+
+    _bindFrameListeners() {
+      if (this._frame) {
+        this._frame.addEventListener("pointerdown", this._onPointerDown);
+        this._frame.addEventListener("pointermove", this._onPointerMove);
+        this._frame.addEventListener("pointerup", this._onPointerUp);
+        this._frame.addEventListener("pointercancel", this._onPointerUp);
+      }
+      if (this._handle) {
+        this._handle.addEventListener("keydown", this._onKeydown);
+      }
+    }
+
+    _unbindFrameListeners() {
+      if (this._frame) {
+        this._frame.removeEventListener("pointerdown", this._onPointerDown);
+        this._frame.removeEventListener("pointermove", this._onPointerMove);
+        this._frame.removeEventListener("pointerup", this._onPointerUp);
+        this._frame.removeEventListener("pointercancel", this._onPointerUp);
+      }
+      if (this._handle) {
+        this._handle.removeEventListener("keydown", this._onKeydown);
+      }
+    }
+
+    /** Lazily create the .cv-compare__header wrapper. Called from
+     * _hydrate when title/meta is present at build time, and from
+     * attributeChangedCallback when title/meta is added later. */
+    _ensureHeader() {
+      if (this._headerEl) return;
+      this._headerEl = document.createElement("div");
+      this._headerEl.className = "cv-compare__header";
+      // Header sits before the frame. If hydrate hasn't built the
+      // frame yet, prepend; otherwise insert before the frame.
+      if (this._frame) {
+        this.insertBefore(this._headerEl, this._frame);
+      } else {
+        this.appendChild(this._headerEl);
+      }
+    }
+
+    attributeChangedCallback(name, _oldValue, newValue) {
+      if (!this._hydrated) return;
+
+      switch (name) {
+        case "before-src":
+          if (this._beforeImg) this._beforeImg.src = newValue ?? "";
+          break;
+        case "after-src":
+          if (this._afterImg) this._afterImg.src = newValue ?? "";
+          break;
+        case "before-alt":
+          if (this._beforeImg) this._beforeImg.alt = newValue ?? "";
+          break;
+        case "after-alt":
+          if (this._afterImg) this._afterImg.alt = newValue ?? "";
+          break;
+        case "before-label":
+          if (this._beforeLabel) this._beforeLabel.textContent = newValue || "Before";
+          break;
+        case "after-label":
+          if (this._afterLabel) this._afterLabel.textContent = newValue || "After";
+          break;
+        case "title":
+          if (this._titleEl) {
+            this._titleEl.textContent = newValue ?? "";
+          } else if (newValue) {
+            this._ensureHeader();
+            this._titleEl = document.createElement("h3");
+            this._titleEl.className = "cv-compare__title";
+            this._titleEl.textContent = newValue;
+            // Title goes first inside the header.
+            this._headerEl.insertBefore(this._titleEl, this._headerEl.firstChild);
+          }
+          break;
+        case "meta":
+          if (this._metaEl) {
+            this._metaEl.textContent = newValue ?? "";
+          } else if (newValue) {
+            this._ensureHeader();
+            this._metaEl = document.createElement("p");
+            this._metaEl.className = "cv-compare__meta";
+            this._metaEl.textContent = newValue;
+            this._headerEl.appendChild(this._metaEl);
+          }
+          break;
+        case "start":
+          this._setPosition(parseStart(newValue));
+          break;
+      }
+    }
+
+    _hydrate() {
+      // Idempotency guard. _hydrated is set at the END of this method,
+      // so two distinct connectedCallback firings (e.g. element moved
+      // in DOM before the first queued microtask runs) could both call
+      // _hydrate() before either one sets _hydrated=true. The second
+      // call would build a duplicate frame on top of the first.
+      if (this._hydrated) return;
+
+      // Defensive: empty any authored children. The component is
+      // terminal — its visual parts are generated here, not authored
+      // by hand. The COMPONENTS.md lint refuses non-empty
+      // <convos-compare>, but if something slips through (e.g. an
+      // older template), drop it rather than leak it into the frame.
+      while (this.firstChild) this.removeChild(this.firstChild);
+
+      this.classList.add("cv-compare");
+
+      // ── Optional header (title + meta) ────────────────────────
+      const titleAttr = this.getAttribute("title");
+      const metaAttr = this.getAttribute("meta");
+      if (titleAttr || metaAttr) {
+        this._ensureHeader();
+
+        if (titleAttr) {
+          const h = document.createElement("h3");
+          h.className = "cv-compare__title";
+          h.textContent = titleAttr;
+          this._headerEl.appendChild(h);
+          this._titleEl = h;
+        }
+        if (metaAttr) {
+          const m = document.createElement("p");
+          m.className = "cv-compare__meta";
+          m.textContent = metaAttr;
+          this._headerEl.appendChild(m);
+          this._metaEl = m;
+        }
+      }
+
+      // ── Frame + images ────────────────────────────────────────
+      const frame = document.createElement("div");
+      frame.className = "cv-compare__frame";
+
+      const afterImg = document.createElement("img");
+      afterImg.className = "cv-compare__img cv-compare__img--after";
+      afterImg.src = this.getAttribute("after-src") || "";
+      afterImg.alt = this.getAttribute("after-alt") || "";
+      afterImg.loading = "eager";
+      afterImg.draggable = false;
+
+      const beforeImg = document.createElement("img");
+      beforeImg.className = "cv-compare__img cv-compare__img--before";
+      beforeImg.src = this.getAttribute("before-src") || "";
+      beforeImg.alt = this.getAttribute("before-alt") || "";
+      beforeImg.loading = "eager";
+      beforeImg.draggable = false;
+
+      // ── Corner labels ─────────────────────────────────────────
+      const beforeLabel = document.createElement("span");
+      beforeLabel.className = "cv-compare__label cv-compare__label--before";
+      beforeLabel.setAttribute("aria-hidden", "true");
+      beforeLabel.textContent = this.getAttribute("before-label") || "Before";
+
+      const afterLabel = document.createElement("span");
+      afterLabel.className = "cv-compare__label cv-compare__label--after";
+      afterLabel.setAttribute("aria-hidden", "true");
+      afterLabel.textContent = this.getAttribute("after-label") || "After";
+
+      // ── Divider line ──────────────────────────────────────────
+      const divider = document.createElement("div");
+      divider.className = "cv-compare__divider";
+      divider.setAttribute("aria-hidden", "true");
+
+      // ── Handle button ─────────────────────────────────────────
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "cv-compare__handle";
+      handle.setAttribute("role", "slider");
+      handle.setAttribute("aria-label", "Before-after divider");
+      handle.setAttribute("aria-valuemin", "0");
+      handle.setAttribute("aria-valuemax", "100");
+
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "cv-compare__handle-icon");
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("aria-hidden", "true");
+      const iconPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      iconPath.setAttribute("d", HANDLE_ICON_PATH);
+      icon.appendChild(iconPath);
+      handle.appendChild(icon);
+
+      // Inner clip layer holds the images + labels + divider line
+      // with overflow:hidden and the rounded border. The handle
+      // button is a sibling of the clip (child of frame), so the
+      // round button can hang off the edges when dragged to 0%/
+      // 100%. The vertical divider line stays INSIDE the clip so
+      // it does clip — when handle reaches an edge, the line
+      // disappears with the image edge, which reads correctly.
+      const clip = document.createElement("div");
+      clip.className = "cv-compare__clip";
+      clip.append(afterImg, beforeImg, beforeLabel, afterLabel, divider);
+
+      frame.append(clip, handle);
+      this.appendChild(frame);
+
+      this._frame = frame;
+      this._beforeImg = beforeImg;
+      this._afterImg = afterImg;
+      this._beforeLabel = beforeLabel;
+      this._afterLabel = afterLabel;
+      this._divider = divider;
+      this._handle = handle;
+
+      // ── Wire interaction ──────────────────────────────────────
+      // One Pointer Events stream covers mouse, touch, and pen.
+      // setPointerCapture (on pointerdown) keeps subsequent
+      // pointermove/up events flowing to the frame even if the
+      // finger drags outside the frame's bounds. Bind via the
+      // shared helper so reconnect-after-disconnect uses the same
+      // attach path.
+      this._bindFrameListeners();
+
+      // ── Initial position ──────────────────────────────────────
+      this._setPosition(parseStart(this.getAttribute("start")));
+
+      this.dataset.hydrated = "true";
+      this._hydrated = true;
+    }
+
+    /** Set the divider position (0–100) and propagate to CSS + ARIA. */
+    _setPosition(pos) {
+      this._pos = clamp(pos, 0, 100);
+      this.style.setProperty("--divider-pos", this._pos + "%");
+      // Numeric copy of the position for CSS calc(). Used by the
+      // divider line's margin-left interpolation that nudges it 2px
+      // outward at the extremes so its 1px side shadows are hidden
+      // by the image clip — without this nudge a thin black line
+      // remained visible at pos=0% and pos=100%.
+      this.style.setProperty("--divider-pos-num", String(this._pos));
+      if (this._handle) {
+        this._handle.setAttribute("aria-valuenow", String(Math.round(this._pos)));
+      }
+    }
+
+    /** Convert a clientX coordinate into a 0–100 divider position. */
+    _xToPosition(clientX) {
+      if (!this._frame) return this._pos;
+      const rect = this._frame.getBoundingClientRect();
+      if (rect.width === 0) return this._pos;
+      const x = clientX - rect.left;
+      return clamp((x / rect.width) * 100, 0, 100);
+    }
+
+    _onPointerDown(e) {
+      if (!this._frame) return;
+      // Only react to primary button on mouse; touch/pen are always
+      // primary in Pointer Events.
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+
+      // Capture so dragging off the frame still tracks.
+      try {
+        this._frame.setPointerCapture(e.pointerId);
+      } catch (_err) {
+        // Some older WebViews throw if the target isn't connected;
+        // safe to ignore — the move handler still works without
+        // capture, just within the frame's bounds.
+      }
+      this._dragging = true;
+      this._setPosition(this._xToPosition(e.clientX));
+      // Focus the handle so subsequent keyboard input (Arrow keys,
+      // Home/End) targets this slider. preventDefault below cancels
+      // the implicit focus that mousedown would normally give the
+      // <button>, so we trigger focus explicitly.
+      if (this._handle && document.activeElement !== this._handle) {
+        this._handle.focus({ preventScroll: true });
+      }
+      e.preventDefault();
+    }
+
+    _onPointerMove(e) {
+      if (!this._dragging) return;
+      this._setPosition(this._xToPosition(e.clientX));
+      e.preventDefault();
+    }
+
+    _onPointerUp(e) {
+      if (!this._dragging) return;
+      this._dragging = false;
+      try {
+        this._frame.releasePointerCapture(e.pointerId);
+      } catch (_err) { /* ignore */ }
+    }
+
+    _onKeydown(e) {
+      const step = e.shiftKey ? 5 : 1;
+      let next = null;
+
+      switch (e.key) {
+        case "ArrowRight":
+        case "ArrowUp":
+          next = this._pos + step;
+          break;
+        case "ArrowLeft":
+        case "ArrowDown":
+          next = this._pos - step;
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = 100;
+          break;
+        case "PageUp":
+          next = this._pos + 10;
+          break;
+        case "PageDown":
+          next = this._pos - 10;
+          break;
+        default:
+          return;
+      }
+
+      e.preventDefault();
+      this._setPosition(next);
+    }
+  }
+
+  customElements.define("convos-compare", ConvosCompare);
+})();
+
+</script>
+<script>
+/* === components/convos-filter/component.js === */
+/* convos-filter — search box + tag chips that hide non-matching children
+ *
+ * Light DOM (never attachShadow). Session-local state — no
+ * localStorage / sessionStorage / network calls.
+ *
+ * On connect, <convos-filter> reads its slotted children, builds a
+ * controls row above them (search input + optional tag chip strip),
+ * aggregates each filterable child's textContent into a lowercased
+ * `data-text` attribute, and wires three listeners:
+ *
+ *   - input on the search input (debounced ~150ms)
+ *   - click on each tag chip (toggle; multi-select OR semantics)
+ *   - keydown on the search input (Escape clears)
+ *
+ * Filter logic: a child is visible iff
+ *   (search input is empty OR data-text contains query) AND
+ *   (no tag selected OR child's data-tag is in the selected set).
+ *
+ * Hide via the native `hidden` attribute — keeps content out of
+ * the accessibility tree as well as out of layout.
+ *
+ * The component descends ONE level into a single <convos-card-stack>
+ * direct child so the chip strip can hide individual cards rather
+ * than the whole stack. Otherwise, filterable units are direct
+ * children of <convos-filter>.
+ */
+
+(() => {
+  // Already-registered guard. The injector may inline this script
+  // alongside other component scripts, and re-defining a custom
+  // element throws.
+  if (customElements.get("convos-filter")) return;
+
+  const DEBOUNCE_MS = 150;
+  const DEFAULT_PLACEHOLDER = "Filter…"; // "Filter…"
+
+  /** Lowercase + collapse whitespace for case-insensitive contains. */
+  function normalize(s) {
+    return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  /** Parse the comma-separated `tags` attribute into a clean array. */
+  function parseTags(raw) {
+    if (!raw) return [];
+    return raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+  }
+
+  class ConvosFilter extends HTMLElement {
+    connectedCallback() {
+      // Idempotent — connectedCallback can fire more than once
+      // (e.g. element moved in DOM). If we've already hydrated,
+      // skip.
+      if (this.dataset.hydrated === "true") return;
+
+      this.classList.add("cv-filter");
+
+      // CRITICAL: connectedCallback fires DURING HTML parsing,
+      // when the parser has inserted <convos-filter> but NOT yet
+      // its children. queueMicrotask alone is too eager — micro-
+      // tasks can fire mid-parse, before children are inserted,
+      // resulting in this._filterables being empty.
+      // Solution: wait for DOMContentLoaded if the document is
+      // still loading; otherwise the element was constructed
+      // post-parse and queueMicrotask is fine.
+      if (document.readyState === "loading") {
+        document.addEventListener(
+          "DOMContentLoaded",
+          () => this._hydrate(),
+          { once: true },
+        );
+      } else {
+        queueMicrotask(() => this._hydrate());
+      }
+    }
+
+    _hydrate() {
+      // Idempotency guard. The dataset.hydrated flag is set at the
+      // END of this method, so two distinct connectedCallback firings
+      // — each queueing its own microtask or DOMContentLoaded
+      // listener — could both call _hydrate() before either one sets
+      // the flag. The second call would re-wrap already-built
+      // controls into a new filterRoot and corrupt the DOM.
+      if (this.dataset.hydrated === "true") return;
+
+      // Capture the slotted children before we wrap them.
+      const slottedChildren = Array.from(this.childNodes);
+
+      // Find the filterable unit list. If the only structural
+      // child is a <convos-card-stack>, we descend one level so
+      // the chip strip can hide individual cards rather than the
+      // whole stack.
+      const elementChildren = slottedChildren.filter(
+        (n) => n.nodeType === Node.ELEMENT_NODE,
+      );
+      let filterRoot = null;
+      let filterables = [];
+
+      // Card-stack passthrough: when the only child is a card-stack
+      // (either pre-expansion <convos-card-stack> in unexpanded
+      // contexts, or post-expansion <div class="card-stack"> after
+      // _expand_card_stacks ran), descend ONE level so we filter the
+      // individual cards rather than the wrapper as a whole.
+      const onlyChild = elementChildren.length === 1 ? elementChildren[0] : null;
+      const isCardStack =
+        onlyChild &&
+        (
+          (onlyChild.tagName && onlyChild.tagName.toLowerCase() === "convos-card-stack") ||
+          (onlyChild.classList && onlyChild.classList.contains("card-stack"))
+        );
+      if (isCardStack) {
+        filterRoot = onlyChild;
+        filterables = Array.from(filterRoot.children).filter(
+          (n) => n.nodeType === Node.ELEMENT_NODE,
+        );
+      } else {
+        // Wrap loose children in our own container so the empty
+        // state can sit alongside them as a sibling.
+        filterRoot = document.createElement("div");
+        filterRoot.className = "cv-filter__items";
+        for (const node of slottedChildren) {
+          filterRoot.appendChild(node);
+        }
+        filterables = Array.from(filterRoot.children).filter(
+          (n) => n.nodeType === Node.ELEMENT_NODE,
+        );
+      }
+
+      // Aggregate text on each filterable child. Skip if the
+      // child already has a data-text attribute (agent-supplied
+      // override).
+      for (const el of filterables) {
+        if (!el.hasAttribute("data-text")) {
+          const text = normalize(el.textContent || "");
+          el.setAttribute("data-text", text);
+        }
+      }
+
+      this._filterables = filterables;
+
+      // Build the controls row.
+      const controls = document.createElement("div");
+      controls.className = "cv-filter__controls";
+
+      // Search pill.
+      const searchLabel = document.createElement("label");
+      searchLabel.className = "cv-filter__search";
+
+      const searchIcon = document.createElement("span");
+      searchIcon.className = "cv-filter__search-icon";
+      searchIcon.setAttribute("aria-hidden", "true");
+      // U+2315 TELEPHONE RECORDER glyph approximates a search lens
+      // in system fonts on iOS / Android / Windows. Using a
+      // unicode glyph rather than an SVG keeps the component
+      // dependency-free and avoids a runtime image load.
+      searchIcon.textContent = "⌕";
+
+      const input = document.createElement("input");
+      input.className = "cv-filter__input";
+      input.type = "search";
+      input.setAttribute("aria-label", "Filter results");
+      input.placeholder =
+        this.getAttribute("placeholder") || DEFAULT_PLACEHOLDER;
+
+      searchLabel.append(searchIcon, input);
+      controls.appendChild(searchLabel);
+
+      // Optional chip strip.
+      const tags = parseTags(this.getAttribute("tags"));
+      let chipButtons = [];
+      if (tags.length > 0) {
+        const chips = document.createElement("div");
+        chips.className = "cv-filter__chips";
+        chips.setAttribute("role", "group");
+        chips.setAttribute("aria-label", "Filter by tag");
+
+        // "All" virtual chip — clears tag selection.
+        const allChip = document.createElement("button");
+        allChip.type = "button";
+        allChip.className = "cv-filter__chip";
+        allChip.setAttribute("data-tag-all", "");
+        allChip.setAttribute("aria-pressed", "true");
+        allChip.textContent = "All";
+        chips.appendChild(allChip);
+
+        for (const tag of tags) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cv-filter__chip";
+          btn.setAttribute("data-tag", tag);
+          btn.setAttribute("aria-pressed", "false");
+          btn.textContent = tag;
+          chips.appendChild(btn);
+          chipButtons.push(btn);
+        }
+
+        controls.appendChild(chips);
+
+        chips.addEventListener("click", (e) => this._onChipClick(e));
+        this._allChip = allChip;
+      }
+      this._chipButtons = chipButtons;
+
+      // Filtered region wraps the children so the empty state
+      // can sit as a sibling and aria-live can announce result
+      // count changes.
+      const region = document.createElement("div");
+      region.className = "cv-filter__region";
+      region.setAttribute("aria-live", "polite");
+
+      region.appendChild(filterRoot);
+
+      const empty = document.createElement("p");
+      empty.className = "cv-filter__empty";
+      empty.setAttribute("hidden", "");
+      empty.textContent = "No results match your filter.";
+      region.appendChild(empty);
+
+      this._region = region;
+      this._emptyEl = empty;
+      this._input = input;
+
+      // Replace the (now empty) custom element's children with
+      // controls + region.
+      // (Children were removed when we appended them into
+      // filterRoot above.)
+      this.appendChild(controls);
+      this.appendChild(region);
+
+      // State.
+      this._query = "";
+      this._selectedTags = new Set();
+      this._debounceHandle = null;
+
+      // Wire input.
+      input.addEventListener("input", () => this._onInput());
+      input.addEventListener("keydown", (e) => this._onKeydown(e));
+
+      // Initial pass — everything visible.
+      this._applyFilter();
+
+      this.dataset.hydrated = "true";
+    }
+
+    _onInput() {
+      // Debounce so a fast typist doesn't run the filter on every
+      // keystroke. 150ms is the typical sweet spot for live
+      // search — short enough to feel instant, long enough to
+      // skip work between bursts.
+      if (this._debounceHandle != null) {
+        clearTimeout(this._debounceHandle);
+      }
+      this._debounceHandle = setTimeout(() => {
+        this._debounceHandle = null;
+        this._query = normalize(this._input.value || "");
+        this._applyFilter();
+      }, DEBOUNCE_MS);
+    }
+
+    _onKeydown(e) {
+      if (e.key === "Escape" && this._input.value) {
+        e.preventDefault();
+        this._input.value = "";
+        // Skip debounce on Escape — the clear should feel
+        // instant.
+        if (this._debounceHandle != null) {
+          clearTimeout(this._debounceHandle);
+          this._debounceHandle = null;
+        }
+        this._query = "";
+        this._applyFilter();
+      }
+    }
+
+    _onChipClick(e) {
+      const btn = e.target.closest(".cv-filter__chip");
+      if (!btn) return;
+
+      // "All" chip clears tag selection.
+      if (btn.hasAttribute("data-tag-all")) {
+        this._selectedTags.clear();
+        this._syncChipState();
+        this._applyFilter();
+        return;
+      }
+
+      const tag = btn.getAttribute("data-tag");
+      if (!tag) return;
+
+      if (this._selectedTags.has(tag)) {
+        this._selectedTags.delete(tag);
+      } else {
+        this._selectedTags.add(tag);
+      }
+
+      this._syncChipState();
+      this._applyFilter();
+    }
+
+    _syncChipState() {
+      const noneSelected = this._selectedTags.size === 0;
+      if (this._allChip) {
+        this._allChip.setAttribute(
+          "aria-pressed",
+          noneSelected ? "true" : "false",
+        );
+      }
+      for (const btn of this._chipButtons) {
+        const tag = btn.getAttribute("data-tag");
+        const active = this._selectedTags.has(tag);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      }
+    }
+
+    _applyFilter() {
+      const query = this._query;
+      const selectedTags = this._selectedTags;
+      const hasQuery = query.length > 0;
+      const hasTag = selectedTags.size > 0;
+
+      let visibleCount = 0;
+      for (const el of this._filterables) {
+        const text = el.getAttribute("data-text") || "";
+        const tag = el.getAttribute("data-tag") || "";
+
+        const textMatch = !hasQuery || text.indexOf(query) !== -1;
+        const tagMatch = !hasTag || (tag && selectedTags.has(tag));
+
+        if (textMatch && tagMatch) {
+          el.removeAttribute("hidden");
+          visibleCount += 1;
+        } else {
+          el.setAttribute("hidden", "");
+        }
+      }
+
+      // Empty state + result count for aria-live.
+      if (visibleCount === 0) {
+        this._emptyEl.removeAttribute("hidden");
+      } else {
+        this._emptyEl.setAttribute("hidden", "");
+      }
+      this._region.setAttribute(
+        "data-result-count",
+        String(visibleCount),
+      );
+    }
+  }
+
+  customElements.define("convos-filter", ConvosFilter);
+})();
+
+</script>
+<script>
+/* === components/convos-keyboard/component.js === */
+/* convos-keyboard — on-screen QWERTY input primitive
+ *
+ * A tap-driven 3-row keyboard that any artifact can use as a single-
+ * letter input affordance (Wordle/Hangman-style word games, language
+ * drills, accessibility input modes inside artifacts).
+ *
+ * Hydration shape:
+ *   - Build a 3-row keyboard: QWERTYUIOP / ASDFGHJKL /
+ *     [Enter] ZXCVBNM [Backspace].
+ *   - Per-key state managed via class. State sources:
+ *       1. attributes on the host (correct="A,B" present="C" absent="D"
+ *          disabled="E" — comma-separated letter lists).
+ *       2. attributeChangedCallback recomputes when any of those attrs
+ *          change.
+ *     Highest-precedence wins (correct > present > absent > disabled
+ *     > none); same algorithm as the inlined Wordle agent's keyMap.
+ *   - Tap on a key fires `convos-keyboard:keypress` on the host with
+ *     detail `{ key }`. Special keys dispatch as `key: "Enter"` /
+ *     `key: "Backspace"`.
+ *   - `physical-keyboard="on"` opt-in: also bind document keydown so
+ *     the on-screen UI mirrors physical keys for desktop debugging /
+ *     dual-input scenarios. Default OFF — the on-screen keyboard
+ *     exists *because* there's no system keyboard up (mobile /
+ *     Quick Look), so listening for physical keys would just be
+ *     dead code on every device this ships to.
+ *
+ * Light DOM only — never attachShadow().
+ * Session-local state — no localStorage / sessionStorage.
+ */
+
+(() => {
+  if (customElements.get("convos-keyboard")) return;
+
+  // Layout — three rows, with Enter / Backspace flanking the third.
+  const ROW_TOP    = "QWERTYUIOP";
+  const ROW_MIDDLE = "ASDFGHJKL";
+  const ROW_BOTTOM = "ZXCVBNM";
+
+  const STATE_PRECEDENCE = {
+    none: 0,
+    disabled: 1,
+    absent: 2,
+    present: 3,
+    correct: 4,
+  };
+  const STATES = ["correct", "present", "absent", "disabled"];
+
+  // Parse a comma-separated letter list ("A,B,C" or "abc") into an
+  // uppercase set. Whitespace-tolerant; ignores empties and non-letters.
+  function parseLetterList(raw) {
+    if (!raw) return new Set();
+    const out = new Set();
+    for (const tok of String(raw).split(/[,\s]+/)) {
+      const ch = tok.trim().toUpperCase();
+      if (ch.length === 1 && /^[A-Z]$/.test(ch)) {
+        out.add(ch);
+      } else if (ch.length > 1) {
+        // "ABC" form — each char its own letter.
+        for (const c of ch) {
+          if (/^[A-Z]$/.test(c)) out.add(c);
+        }
+      }
+    }
+    return out;
+  }
+
+  class ConvosKeyboard extends HTMLElement {
+    static get observedAttributes() {
+      return ["correct", "present", "absent", "disabled", "physical-keyboard"];
+    }
+
+    constructor() {
+      super();
+      this._hydrated = false;
+      this._keyMap = new Map();           // letter → button element
+      this._specialMap = new Map();       // "Enter"/"Backspace" → button
+      this._onKeydown = this._onKeydown.bind(this);
+      this._onClick = this._onClick.bind(this);
+    }
+
+    connectedCallback() {
+      if (this._hydrated) {
+        this._bindPhysicalKeyboard();
+        return;
+      }
+      // queueMicrotask defers past any synchronous attribute setup
+      // the author may do right after construction.
+      queueMicrotask(() => this._hydrate());
+    }
+
+    disconnectedCallback() {
+      document.removeEventListener("keydown", this._onKeydown);
+    }
+
+    attributeChangedCallback(name, _old, _next) {
+      if (!this._hydrated) return;
+      if (name === "physical-keyboard") {
+        this._bindPhysicalKeyboard();
+      } else {
+        this._applyStates();
+      }
+    }
+
+    _hydrate() {
+      if (this._hydrated) return;
+      // queueMicrotask in connectedCallback can fire after the element
+      // was already removed from the DOM. Bail so we don't register
+      // a `document` keydown listener that disconnectedCallback can't
+      // tear down.
+      if (!this.isConnected) return;
+      // Empty any authored children — the keyboard is generated.
+      while (this.firstChild) this.removeChild(this.firstChild);
+      this.classList.add("cv-keyboard");
+
+      const rowTop    = this._buildRow(ROW_TOP, false);
+      const rowMid    = this._buildRow(ROW_MIDDLE, false);
+      const rowBottom = this._buildBottomRow(ROW_BOTTOM);
+      this.appendChild(rowTop);
+      this.appendChild(rowMid);
+      this.appendChild(rowBottom);
+
+      this.addEventListener("click", this._onClick);
+      this._bindPhysicalKeyboard();
+
+      this._applyStates();
+      this.dataset.hydrated = "true";
+      this._hydrated = true;
+    }
+
+    _buildRow(letters, _bottom) {
+      const row = document.createElement("div");
+      row.className = "cv-keyboard__row";
+      for (const ch of letters) {
+        row.appendChild(this._makeKey(ch));
+      }
+      return row;
+    }
+
+    _buildBottomRow(letters) {
+      const row = document.createElement("div");
+      row.className = "cv-keyboard__row";
+      // ⏎ (U+23CE Return Symbol) is the iOS / system convention for
+      // Enter on touch keyboards; ⌫ (U+232B) for backspace. Both are
+      // monochrome glyphs that pick up `currentColor`, so per-state
+      // modifiers (correct/present/absent/disabled) tint them along
+      // with the letter keys.
+      const enter = this._makeSpecialKey("Enter", "⏎");
+      row.appendChild(enter);
+      this._specialMap.set("Enter", enter);
+      for (const ch of letters) {
+        row.appendChild(this._makeKey(ch));
+      }
+      const back = this._makeSpecialKey("Backspace", "⌫");
+      row.appendChild(back);
+      this._specialMap.set("Backspace", back);
+      return row;
+    }
+
+    _makeKey(letter) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cv-keyboard__key";
+      btn.dataset.key = letter;
+      btn.textContent = letter;
+      btn.setAttribute("aria-label", letter);
+      this._keyMap.set(letter, btn);
+      return btn;
+    }
+
+    _makeSpecialKey(key, label) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cv-keyboard__key cv-keyboard__key--wide";
+      btn.dataset.key = key;
+      btn.textContent = label;
+      btn.setAttribute("aria-label", key);
+      return btn;
+    }
+
+    _applyStates() {
+      const sets = {
+        correct: parseLetterList(this.getAttribute("correct")),
+        present: parseLetterList(this.getAttribute("present")),
+        absent: parseLetterList(this.getAttribute("absent")),
+        disabled: parseLetterList(this.getAttribute("disabled")),
+      };
+
+      for (const [letter, btn] of this._keyMap) {
+        // Determine the highest-precedence state for this letter.
+        let winner = "none";
+        for (const st of STATES) {
+          if (sets[st].has(letter)) {
+            if (STATE_PRECEDENCE[st] > STATE_PRECEDENCE[winner]) {
+              winner = st;
+            }
+          }
+        }
+        // Reset class set, then re-apply the winner.
+        btn.classList.remove(
+          "cv-keyboard__key--correct",
+          "cv-keyboard__key--present",
+          "cv-keyboard__key--absent",
+          "cv-keyboard__key--disabled",
+        );
+        if (winner !== "none") {
+          btn.classList.add(`cv-keyboard__key--${winner}`);
+        }
+        // Disabled also sets the native attribute so taps no-op.
+        if (winner === "disabled") {
+          btn.setAttribute("disabled", "");
+        } else {
+          btn.removeAttribute("disabled");
+        }
+      }
+    }
+
+    _bindPhysicalKeyboard() {
+      const on =
+        (this.getAttribute("physical-keyboard") || "").toLowerCase() === "on";
+      document.removeEventListener("keydown", this._onKeydown);
+      if (on) {
+        document.addEventListener("keydown", this._onKeydown);
+      }
+    }
+
+    _onKeydown(e) {
+      // Skip when the user is typing into an input/textarea — let the
+      // native input handle it. Also skip modifier-combos so Cmd-R,
+      // Ctrl-A, etc. pass through.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target;
+      if (
+        target &&
+        target.tagName &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      let key = null;
+      if (e.key === "Enter") key = "Enter";
+      else if (e.key === "Backspace") key = "Backspace";
+      else if (/^[a-zA-Z]$/.test(e.key)) key = e.key.toUpperCase();
+      if (!key) return;
+
+      // Don't preventDefault on physical keystrokes — that would
+      // break the page's normal keyboard semantics for non-letter
+      // contexts. The artifact's listener decides what to do.
+      this._dispatch(key);
+    }
+
+    _onClick(e) {
+      const btn = e.target.closest("[data-key]");
+      if (!btn) return;
+      if (btn.hasAttribute("disabled")) return;
+      this._dispatch(btn.dataset.key);
+    }
+
+    _dispatch(key) {
+      this.dispatchEvent(
+        new CustomEvent("convos-keyboard:keypress", {
+          detail: { key },
+          bubbles: true,
+          composed: false,
+        }),
+      );
+    }
+  }
+
+  customElements.define("convos-keyboard", ConvosKeyboard);
+})();
+
+</script>
+<script>
+/* === components/convos-tabs/component.js === */
+/* convos-tabs — multi-panel container with a clickable label strip
+ *
+ * Light DOM (never attachShadow). Session-local state — no
+ * localStorage / sessionStorage / network calls.
+ *
+ * <convos-tabs> observes its <convos-tab> children at connect, builds
+ * a <div class="cv-tabs__list" role="tablist"> of <button role="tab">
+ * elements above them, applies WAI-ARIA Tabs semantics, and wires
+ * click + keyboard (Arrow Left/Right, Home/End, Enter/Space) to
+ * activate panels.
+ *
+ * <convos-tab> is mostly a marker — it carries the panel's `label`
+ * attribute and the panel content. The tabs element does the real
+ * work; the tab element exposes only an `active` setter the parent
+ * uses to manage hidden/aria-labelledby/tabindex.
+ */
+
+(() => {
+  // Already-registered guard. The injector may inline this script
+  // alongside other component scripts, and re-defining a custom
+  // element throws.
+  if (customElements.get("convos-tabs")) return;
+
+  let uidCounter = 0;
+  const nextUid = () => `cv-tabs-${++uidCounter}`;
+
+  // ────────────────────────────────────────────────────────────
+  // <convos-tab>
+  // ────────────────────────────────────────────────────────────
+
+  class ConvosTab extends HTMLElement {
+    connectedCallback() {
+      // The parent <convos-tabs> owns role/aria-* assignment so it
+      // can keep the strip and panels in sync. We just make sure
+      // we're discoverable as a panel.
+      if (!this.hasAttribute("role")) this.setAttribute("role", "tabpanel");
+      this.classList.add("cv-tabs__panel");
+    }
+
+    /** Activate or deactivate this panel. Called by the parent. */
+    setActive(active) {
+      if (active) {
+        this.removeAttribute("hidden");
+        this.setAttribute("tabindex", "0");
+      } else {
+        this.setAttribute("hidden", "");
+        this.setAttribute("tabindex", "-1");
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // <convos-tabs>
+  // ────────────────────────────────────────────────────────────
+
+  class ConvosTabs extends HTMLElement {
+    connectedCallback() {
+      // Idempotent — connectedCallback can fire more than once
+      // (e.g. element moved in DOM). If we've already hydrated,
+      // skip.
+      if (this.dataset.hydrated === "true") return;
+
+      this.classList.add("cv-tabs");
+
+      // CRITICAL: connectedCallback fires DURING HTML parsing,
+      // when the parser has inserted <convos-tabs> but NOT yet
+      // its <convos-tab> children. queueMicrotask alone can fire
+      // mid-parse, before children are inserted. Wait for
+      // DOMContentLoaded when the document is still loading.
+      if (document.readyState === "loading") {
+        document.addEventListener(
+          "DOMContentLoaded",
+          () => this._hydrate(),
+          { once: true },
+        );
+      } else {
+        queueMicrotask(() => this._hydrate());
+      }
+    }
+
+    _hydrate() {
+      // Idempotency guard. connectedCallback already short-circuits
+      // when dataset.hydrated is "true", but the flag is only set
+      // at the END of this method. If connectedCallback fires twice
+      // before the queued microtask / DOMContentLoaded handler runs
+      // (rapid DOM moves, or two distinct DOMContentLoaded
+      // listeners both queued from separate connectedCallback
+      // invocations), _hydrate() can be called twice and the second
+      // call would create a duplicate tablist. Belt-and-suspenders.
+      if (this.dataset.hydrated === "true") return;
+
+      const uid = nextUid();
+      this._uid = uid;
+
+      // Read the panels in document order. Anything that isn't a
+      // <convos-tab> is an authoring error; we leave it alone (the
+      // dispatch-time lint catches it) but skip it here.
+      const panels = Array.from(this.children).filter(
+        (el) => el.tagName && el.tagName.toLowerCase() === "convos-tab"
+      );
+
+      if (panels.length === 0) {
+        // Nothing to hydrate. Mark as done so we don't loop.
+        this.dataset.hydrated = "true";
+        return;
+      }
+
+      // Optional title + meta header. Sits ABOVE the tab strip so
+      // standalone tabs (a project's "Overview / Details / Specs"
+      // page, a pitch deck's "Concept / Market / Menu / Financials")
+      // read as a labeled artifact, not a bare strip. Either attr
+      // alone is fine; missing both = no header rendered.
+      const titleAttr = this.getAttribute("title");
+      const metaAttr = this.getAttribute("meta");
+      let headerEl = null;
+      if (titleAttr || metaAttr) {
+        headerEl = document.createElement("div");
+        headerEl.className = "cv-tabs__header";
+        if (titleAttr) {
+          const t = document.createElement("p");
+          t.className = "cv-tabs__title";
+          t.textContent = titleAttr;
+          headerEl.appendChild(t);
+        }
+        if (metaAttr) {
+          const m = document.createElement("p");
+          m.className = "cv-tabs__meta";
+          m.textContent = metaAttr;
+          headerEl.appendChild(m);
+        }
+      }
+
+      // Build the tab strip.
+      const list = document.createElement("div");
+      list.className = "cv-tabs__list";
+      list.setAttribute("role", "tablist");
+
+      const buttons = panels.map((panel, i) => {
+        const tabId = `${uid}-tab-${i}`;
+        const panelId = `${uid}-panel-${i}`;
+
+        const label = panel.getAttribute("label") || "";
+
+        // Wire the panel's ids/aria first so the buttons can point
+        // at them.
+        panel.id = panelId;
+        panel.setAttribute("aria-labelledby", tabId);
+        if (!panel.hasAttribute("role")) panel.setAttribute("role", "tabpanel");
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cv-tabs__tab";
+        btn.setAttribute("role", "tab");
+        btn.id = tabId;
+        btn.setAttribute("aria-controls", panelId);
+        btn.textContent = label;
+        list.appendChild(btn);
+
+        // Pointer activation.
+        btn.addEventListener("click", () => this._activate(i, { focus: false }));
+
+        return btn;
+      });
+
+      // Keyboard: Arrow Left/Right cycle, Home/End jump, Enter/Space
+      // activate (Enter/Space is mostly redundant with click since
+      // <button> handles that natively, but we keep it explicit so
+      // the keydown branch is complete).
+      list.addEventListener("keydown", (e) => this._onKeydown(e));
+
+      // Insert the optional header, then the strip, before the first
+      // panel. Order matters: header → strip → panels.
+      if (headerEl) {
+        this.insertBefore(headerEl, panels[0]);
+      }
+      this.insertBefore(list, panels[0]);
+
+      this._panels = panels;
+      this._buttons = buttons;
+
+      // Pick the initial active tab. `default-label` wins; fall
+      // through to the first child. A miss falls through silently.
+      const defaultLabel = this.getAttribute("default-label");
+      let initial = 0;
+      if (defaultLabel != null) {
+        const idx = panels.findIndex(
+          (p) => p.getAttribute("label") === defaultLabel
+        );
+        if (idx >= 0) initial = idx;
+      }
+
+      this._activate(initial, { focus: false });
+      this.dataset.hydrated = "true";
+    }
+
+    _activate(index, { focus } = { focus: true }) {
+      if (!this._panels || !this._buttons) return;
+      if (index < 0 || index >= this._panels.length) return;
+
+      this._activeIndex = index;
+
+      this._buttons.forEach((btn, i) => {
+        const isActive = i === index;
+        btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        // Roving tabindex — only the active tab is in the tab order;
+        // arrow keys move focus among the others.
+        btn.setAttribute("tabindex", isActive ? "0" : "-1");
+        if (isActive && focus) btn.focus();
+      });
+
+      this._panels.forEach((panel, i) => {
+        if (typeof panel.setActive === "function") {
+          panel.setActive(i === index);
+        } else {
+          // Fallback if the <convos-tab> upgrade hasn't run yet.
+          if (i === index) {
+            panel.removeAttribute("hidden");
+            panel.setAttribute("tabindex", "0");
+          } else {
+            panel.setAttribute("hidden", "");
+            panel.setAttribute("tabindex", "-1");
+          }
+        }
+      });
+    }
+
+    _onKeydown(e) {
+      if (!this._buttons) return;
+
+      const count = this._buttons.length;
+      const current = this._activeIndex ?? 0;
+      let next = null;
+
+      switch (e.key) {
+        case "ArrowRight":
+          next = (current + 1) % count;
+          break;
+        case "ArrowLeft":
+          next = (current - 1 + count) % count;
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = count - 1;
+          break;
+        case "Enter":
+        case " ":
+        case "Spacebar": {
+          // Activate whichever tab currently has focus. With a
+          // roving tabindex, this is usually the already-active tab
+          // — but if the user has tabbed in via an arrow key on a
+          // different focus model, this catches it.
+          const focused = document.activeElement;
+          const idx = this._buttons.indexOf(focused);
+          if (idx >= 0) next = idx;
+          break;
+        }
+        default:
+          return;
+      }
+
+      if (next == null) return;
+      e.preventDefault();
+      this._activate(next, { focus: true });
+    }
+  }
+
+  customElements.define("convos-tab", ConvosTab);
+  customElements.define("convos-tabs", ConvosTabs);
+})();
+
 </script>
 </body>
 </html>
