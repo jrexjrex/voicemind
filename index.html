@@ -1663,7 +1663,7 @@ function stopRambleRecording() {
   rambleTranscript = '';
   if (raw) {
     const groups = parseBraindump(raw);
-    renderBraindumpCategories(groups);
+    renderBraindumpCategories(groups, raw);
     jarvisSpeak(`Breakdown complete. I found ${groups.length} ${groups.length === 1 ? 'category' : 'categories'} from your recording.`);
   }
 }
@@ -1678,26 +1678,153 @@ function updateRambleWordCount() {
 
 // ── Braindump Parser ───────────────────────────────────────────
 function parseBraindump(transcript) {
-  // Split on natural transition words
-  const transitions = /(?:also|and another thing|oh and|plus|by the way|don't forget|i need to|i should|make sure to|oh i|actually|anyway|so|btw|p\.s\.)(?:\s+)/gi;
-  const sentences = transcript.replace(transitions, '|||').split(/[.!?]+|\|\|\|/).filter(s => s.trim().length > 3);
+  if (!transcript || !transcript.trim()) return [];
 
+  // ── Step 1: Normalize contractions ────────────────────────────
+  let text = transcript
+    .replace(/don't/gi, 'do not')
+    .replace(/won't/gi, 'will not')
+    .replace(/can't/gi, 'cannot')
+    .replace(/isn't/gi, 'is not')
+    .replace(/aren't/gi, 'are not')
+    .replace(/wasn't/gi, 'was not')
+    .replace(/weren't/gi, 'were not')
+    .replace(/hasn't/gi, 'has not')
+    .replace(/haven't/gi, 'have not')
+    .replace(/hadn't/gi, 'had not')
+    .replace(/I'm/gi, 'I am')
+    .replace(/I've/gi, 'I have')
+    .replace(/I'll/gi, 'I will')
+    .replace(/I'd/gi, 'I would')
+    .replace(/it's/gi, 'it is')
+    .replace(/we're/gi, 'we are')
+    .replace(/they're/gi, 'they are')
+    .replace(/you're/gi, 'you are')
+    .replace(/he's/gi, 'he is')
+    .replace(/she's/gi, 'she is')
+    .replace(/that's/gi, 'that is')
+    .replace(/there's/gi, 'there is')
+    .replace(/let's/gi, 'let us')
+    .replace(/what's/gi, 'what is')
+    .replace(/we've/gi, 'we have')
+    .replace(/they've/gi, 'they have')
+    .replace(/we'll/gi, 'we will')
+    .replace(/they'll/gi, 'they will');
+
+  // ── Step 2: Trigger-based clause extraction ────────────────────
+  // Ordered so longer/more-specific phrases come first
+  const triggerPhrases = [
+    'and another thing',
+    'make sure to',
+    'do not forget to',
+    'remember to',
+    'by the way',
+    'oh and',
+    'and also',
+    'another thing',
+    'I need to',
+    'I have to',
+    'I should',
+    'I want to',
+    'we need to',
+    'have to',
+    'need to',
+    'gotta',
+    'gonna',
+    'also',
+    'plus',
+    'actually',
+  ];
+
+  // Build a regex that matches any trigger phrase (case-insensitive)
+  const escapedPhrases = triggerPhrases.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const triggerRegex = new RegExp(
+    '(?:^|(?<=[.!?\\s]))(' + escapedPhrases.join('|') + ')\\s+',
+    'gi'
+  );
+
+  // Insert a sentinel before each trigger match so we can split cleanly
+  const SENTINEL = '\x00SPLIT\x00';
+  const marked = text.replace(triggerRegex, (match, trigger) => SENTINEL + trigger + ' ');
+
+  // Split on sentinel OR on sentence-ending punctuation
+  let rawClauses = marked.split(new RegExp(SENTINEL + '|(?<=[.!?])\\s+')).map(s => s.trim()).filter(Boolean);
+
+  // ── Step 3: Clean each clause ─────────────────────────────────
+  const fillerStart = /^(?:um+|uh+|so|like|actually|basically|you know|well|right|okay|ok|I mean|I guess)\s+/gi;
+  const fillerEnd   = /\s+(?:um+|uh+|you know|right|okay|ok)$/gi;
+
+  function cleanClause(clause) {
+    let c = clause.trim();
+    // Capitalize first letter
+    c = c.charAt(0).toUpperCase() + c.slice(1);
+    // Strip leading fillers (loop to handle stacked fillers)
+    let prev;
+    do {
+      prev = c;
+      c = c.replace(fillerStart, '');
+      c = c.charAt(0).toUpperCase() + c.slice(1);
+    } while (c !== prev);
+    // Strip trailing fillers
+    c = c.replace(fillerEnd, '').trim();
+    // Remove trailing punctuation oddities but keep real sentence endings
+    c = c.replace(/[,;:]+$/, '').trim();
+    return c;
+  }
+
+  const cleaned = rawClauses
+    .map(cleanClause)
+    .filter(c => c.split(/\s+/).length >= 4); // minimum 4 words
+
+  // ── Step 4: Fallback – sentence-boundary split ─────────────────
+  // If trigger extraction yielded 0 or 1 clauses, try sentence splitting
+  let clauses = cleaned;
+  if (clauses.length <= 1) {
+    const actionVerbs = /\b(call|email|text|buy|get|pick up|fix|schedule|book|pay|remind|submit|send|finish|clean|wash|order|return|cancel|sign|fill|complete|update|check|go|do|make|take|give|find|write|read|watch|try|ask|tell|show|review|set|turn|bring|pull|push|start|stop|need|have|want|see|put|run|work|plan|use|help|keep|hold|move|build|meet|visit|open|close|add|remove)\b/i;
+    const fallbackClauses = text
+      .split(/[.!?]+/)
+      .map(s => cleanClause(s))
+      .filter(c => c.split(/\s+/).length >= 4 && actionVerbs.test(c));
+    if (fallbackClauses.length > clauses.length) clauses = fallbackClauses;
+  }
+
+  // ── Step 5: Categorize each clause ─────────────────────────────
   const categories = { TASKS: [], WORK: [], ERRANDS: [], PERSONAL: [], IDEAS: [] };
 
-  sentences.forEach(s => {
-    const low = s.toLowerCase();
-    if (/need to|should|have to|must|call|email|text|buy|fix|schedule|book|pay|remind|pick up|sign|submit|send|check/.test(low)) categories.TASKS.push(s.trim());
-    else if (/meeting|project|deadline|report|client|boss|coworker|office|work|job|presentation|invoice|slack/.test(low)) categories.WORK.push(s.trim());
-    else if (/go to|pick up|get some|grocery|groceries|store|pharmacy|doctor|appointment|errand|post office|bank|fill up|tank|car/.test(low)) categories.ERRANDS.push(s.trim());
-    else if (/tell|talk to|ask|check with|mom|dad|kids|friend|partner|wife|husband|family|birthday|dinner|gift/.test(low)) categories.PERSONAL.push(s.trim());
-    else if (/idea|maybe|what if|could|thinking|consider|explore|brainstorm|concept|imagine|vision|startup/.test(low)) categories.IDEAS.push(s.trim());
-    else categories.TASKS.push(s.trim()); // default to TASKS
+  clauses.forEach(clause => {
+    const low = clause.toLowerCase();
+
+    // IDEAS first (before TASKS so "could/maybe/idea" don't get swallowed by action-verb match)
+    if (/\b(idea|maybe|what if|could|thinking about|consider|explore|brainstorm|concept|vision|startup|pitch|plan)\b/.test(low)) {
+      categories.IDEAS.push(clause);
+    }
+    // WORK
+    else if (/\b(meeting|project|deadline|report|client|boss|presentation|invoice|work|office|job|team|review|proposal|contract|hire|feedback|slack|zoom)\b/.test(low)) {
+      categories.WORK.push(clause);
+    }
+    // ERRANDS
+    else if (/\b(grocery|groceries|store|pharmacy|doctor|appointment|post office|bank|gas|dry cleaning|dentist|vet|car|pickup|pick up|drop off|school)\b/.test(low)) {
+      categories.ERRANDS.push(clause);
+    }
+    // PERSONAL – proper nouns (capital letter mid-sentence) OR relationship words
+    else if (/\b(mom|dad|kids|partner|wife|husband|friend|family|birthday|anniversary|gift|dinner|date|weekend)\b/.test(low)
+             || /(?<!\.\s)\b[A-Z][a-z]{2,}\b/.test(clause)) {
+      categories.PERSONAL.push(clause);
+    }
+    // TASKS – action verbs
+    else if (/\b(call|email|text|buy|get|pick up|fix|schedule|book|pay|remind|submit|send|finish|clean|wash|order|return|cancel|sign|fill|complete|update|check)\b/.test(low)) {
+      categories.TASKS.push(clause);
+    }
+    // Default → TASKS
+    else {
+      categories.TASKS.push(clause);
+    }
   });
 
   return Object.entries(categories).filter(([k,v]) => v.length).map(([cat, items]) => ({cat, items}));
 }
 
-function renderBraindumpCategories(groups) {
+function renderBraindumpCategories(groups, rawTranscript) {
   const catColors = {
     TASKS:    '#00e5ff',
     WORK:     '#7b42bc',
@@ -1711,6 +1838,12 @@ function renderBraindumpCategories(groups) {
   if (list) list.innerHTML = '';
   if (hint) hint.style.display = 'none';
   priorityBlocks = [];
+
+  // ── Fallback: if extraction yielded 0 or 1 items, show full transcript ──
+  const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
+  if (totalItems <= 1 && rawTranscript && rawTranscript.trim()) {
+    groups = [{ cat: 'TASKS', items: ['JARVIS: transcript captured — tap to edit into tasks\n\n' + rawTranscript.trim()] }];
+  }
 
   groups.forEach(({ cat, items }) => {
     const color = catColors[cat] || '#00e5ff';
