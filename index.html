@@ -504,6 +504,98 @@
     mix-blend-mode: overlay;
     pointer-events: none;
   }
+  /* ── Ramble Mode Toggle ── */
+  #ramble-toggle {
+    background: rgba(0,229,255,0.1);
+    border: 1px solid rgba(0,229,255,0.3);
+    color: rgba(0,229,255,0.7);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-block;
+    text-align: center;
+    margin-bottom: 8px;
+    transition: background 0.2s ease, color 0.2s ease;
+    user-select: none;
+  }
+  #ramble-toggle.active {
+    background: rgba(0,229,255,0.2);
+    color: #00e5ff;
+    border-color: rgba(0,229,255,0.6);
+  }
+
+  /* ── Privacy Badge ── */
+  #privacy-badge {
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    text-align: center;
+    margin-bottom: 4px;
+  }
+
+  /* ── Ramble Done Button ── */
+  #ramble-done-btn {
+    position: fixed;
+    bottom: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
+    color: #0d0e1f;
+    border: none;
+    border-radius: 28px;
+    padding: 14px 36px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 30px rgba(255,215,0,0.45), 0 8px 24px rgba(0,0,0,0.5);
+    letter-spacing: 0.5px;
+    display: none;
+  }
+  #ramble-done-btn.visible { display: block; }
+
+  /* ── Ramble Live Display ── */
+  #ramble-live {
+    position: fixed;
+    bottom: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 199;
+    font-size: 12px;
+    color: rgba(0,229,255,0.7);
+    background: rgba(13,14,31,0.85);
+    border: 1px solid rgba(0,229,255,0.2);
+    border-radius: 12px;
+    padding: 6px 14px;
+    display: none;
+    white-space: nowrap;
+  }
+  #ramble-live.visible { display: block; }
+
+  /* ── Braindump Category Cards ── */
+  .braindump-category-card {
+    background: rgba(26,27,65,0.7);
+    border: 1px solid rgba(0,229,255,0.1);
+    border-radius: 14px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .braindump-category-chip {
+    display: inline-block;
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    margin: 10px 12px 8px;
+  }
+  .braindump-category-items {
+    padding: 0 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   #mic-btn:active, #mic-btn.active {
     animation: none;
     transform: scale(0.96);
@@ -950,6 +1042,14 @@
   <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:16px 0;">
 
   <div>
+    <div class="settings-label">Cloudflare Worker URL</div>
+    <input type="url" id="worker-url" class="settings-input" placeholder="https://voicemind-tts.USERNAME.workers.dev">
+    <p style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.5;">Add a free Cloudflare Worker to enable xAI/ElevenLabs voices. See setup guide.</p>
+  </div>
+
+  <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:16px 0;">
+
+  <div>
     <div class="settings-label" style="font-weight:600;color:var(--text-primary);">xAI Voice (Grok)</div>
     <input type="password" id="xai-api-key" class="settings-input" placeholder="Paste xAI API key" style="margin-top:8px;">
   </div>
@@ -972,6 +1072,8 @@
   <div id="live-transcript"></div>
   <p class="mic-label-heading">What's on your mind?</p>
   <p class="mic-hint" id="mic-hint" style="display:none">Hold to speak</p>
+  <div id="privacy-badge">🔒 100% private</div>
+  <div id="ramble-toggle" onclick="toggleRambleMode()">Ramble Mode</div>
   <div class="mic-wrapper" id="mic-wrapper">
     <div id="mic-ring"></div>
     <div class="pulse-ring"></div>
@@ -980,6 +1082,10 @@
     <button id="mic-btn" aria-label="Hold to record">🎙️</button>
   </div>
 </div>
+
+<!-- Ramble Mode floating elements -->
+<div id="ramble-live">🎙 Listening… <span id="ramble-word-count">0</span> words</div>
+<button id="ramble-done-btn" onclick="stopRambleRecording()">Done ✦</button>
 
 <!-- ══════════════════════════════════════════════════════════ -->
 <!--  SCHEDULING PANEL                                          -->
@@ -1061,11 +1167,31 @@ function getJarvisVoice() {
 function jarvisSpeak(text, onEnd) {
   setJarvisStatus('> ' + text);
 
+  const workerUrl = localStorage.getItem('tts_worker_url');
   const elKey = localStorage.getItem('el_api_key');
   const elVoice = localStorage.getItem('el_voice_id') || 'pNInz6obpgDQGcFmaJgB';
 
-  if (elKey) {
-    // Try ElevenLabs TTS
+  if (workerUrl && elKey) {
+    // Route ElevenLabs through Cloudflare Worker proxy
+    fetch(`${workerUrl}/tts/elevenlabs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voiceId: elVoice, apiKey: elKey })
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Worker/ElevenLabs ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
+      audio.onerror = () => { URL.revokeObjectURL(url); xaiSpeak(text, onEnd); };
+      audio.play().catch(() => xaiSpeak(text, onEnd));
+    })
+    .catch(() => xaiSpeak(text, onEnd));
+  } else if (!workerUrl && elKey) {
+    // No worker URL — direct ElevenLabs call (may be CORS-blocked in browser)
     fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elVoice}`, {
       method: 'POST',
       headers: {
@@ -1098,16 +1224,49 @@ function jarvisSpeak(text, onEnd) {
 function xaiSpeak(text, onEnd) {
   const xaiKey = localStorage.getItem('xai_api_key');
   const xaiVoice = localStorage.getItem('xai_voice_id') || 'aurora';
+  const workerUrl = localStorage.getItem('tts_worker_url');
 
-  console.log('[xaiSpeak] called, key present:', !!xaiKey, 'voice:', xaiVoice);
+  console.log('[xaiSpeak] called, key present:', !!xaiKey, 'voice:', xaiVoice, 'workerUrl:', workerUrl);
 
-  if (xaiKey) {
+  if (xaiKey && workerUrl) {
+    // Route xAI TTS through Cloudflare Worker proxy
+    console.log('[xaiSpeak] routing via Cloudflare Worker proxy');
+    fetch(`${workerUrl}/tts/xai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice: xaiVoice, apiKey: xaiKey })
+    })
+    .then(res => {
+      console.log('[xaiSpeak] worker response status:', res.status, res.ok);
+      if (!res.ok) throw new Error('Worker/xAI ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      console.log('[xaiSpeak] got audio blob via worker, size:', blob.size, 'type:', blob.type);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
+      audio.onerror = (e) => {
+        console.error('[xaiSpeak] audio playback error:', e);
+        URL.revokeObjectURL(url);
+        fallbackSpeak(text, onEnd);
+      };
+      audio.play().catch((e) => {
+        console.error('[xaiSpeak] audio.play() failed:', e);
+        fallbackSpeak(text, onEnd);
+      });
+    })
+    .catch((err) => {
+      console.error('[xaiSpeak] worker fetch error:', err);
+      fallbackSpeak(text, onEnd);
+    });
+  } else if (xaiKey && !workerUrl) {
     const requestBody = {
       model: 'grok-2-aurora',
       input: text,
       voice: xaiVoice
     };
-    console.log('[xaiSpeak] sending request to xAI TTS, body:', JSON.stringify(requestBody));
+    console.log('[xaiSpeak] sending request to xAI TTS directly, body:', JSON.stringify(requestBody));
     fetch('https://api.x.ai/v1/audio/speech', {
       method: 'POST',
       headers: {
@@ -1148,7 +1307,7 @@ function xaiSpeak(text, onEnd) {
       fallbackSpeak(text, onEnd);
     });
   } else {
-    console.log('[xaiSpeak] no xAI key, using fallback TTS');
+    console.log('[xaiSpeak] no xAI key or no worker URL, using fallback TTS');
     fallbackSpeak(text, onEnd);
   }
 }
@@ -1396,6 +1555,196 @@ let currentRec  = null;
 let pendingTranscript = '';
 let pendingConfidence = 0;
 
+// ── Ramble Mode State ──────────────────────────────────────────
+let rambleMode = false;
+let rambleTranscript = '';
+let rambleRecognition = null;
+let rambleActive = false;
+
+function toggleRambleMode() {
+  rambleMode = !rambleMode;
+  const toggle = document.getElementById('ramble-toggle');
+  if (toggle) {
+    if (rambleMode) {
+      toggle.classList.add('active');
+      toggle.textContent = '✦ Ramble Mode ON';
+    } else {
+      toggle.classList.remove('active');
+      toggle.textContent = 'Ramble Mode';
+    }
+  }
+}
+
+function startRambleRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  rambleTranscript = '';
+  rambleActive = true;
+
+  const btn     = document.getElementById('mic-btn');
+  const wrapper = document.getElementById('mic-wrapper');
+  btn.classList.add('active');
+  wrapper.classList.add('recording');
+  document.body.classList.add('recording-active');
+  document.getElementById('mic-hint').textContent = 'Ramble recording… tap Done when finished';
+
+  const liveEl    = document.getElementById('ramble-live');
+  const doneBtn   = document.getElementById('ramble-done-btn');
+  if (liveEl)  liveEl.classList.add('visible');
+  if (doneBtn) doneBtn.classList.add('visible');
+  updateRambleWordCount();
+
+  rambleRecognition = new SR();
+  rambleRecognition.continuous     = true;
+  rambleRecognition.interimResults  = true;
+  rambleRecognition.lang            = 'en-US';
+
+  rambleRecognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const result = e.results[i];
+      if (result.isFinal) {
+        const text = result[0].transcript.trim();
+        if (text) rambleTranscript += (rambleTranscript ? ' ' : '') + text;
+        interim = '';
+      } else {
+        interim += result[0].transcript;
+      }
+    }
+    const liveTransEl = document.getElementById('live-transcript');
+    if (liveTransEl) {
+      liveTransEl.textContent = rambleTranscript
+        ? (rambleTranscript + (interim ? ' ' + interim : ''))
+        : interim;
+    }
+    updateRambleWordCount();
+  };
+
+  rambleRecognition.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      document.getElementById('https-banner').style.display = 'block';
+      stopRambleRecording();
+    }
+  };
+
+  rambleRecognition.onend = () => {
+    if (rambleActive) {
+      try { rambleRecognition.start(); } catch(ex) {}
+    }
+  };
+
+  try { rambleRecognition.start(); } catch(ex) {}
+}
+
+function stopRambleRecording() {
+  rambleActive = false;
+  if (rambleRecognition) {
+    try { rambleRecognition.stop(); } catch(ex) {}
+    rambleRecognition = null;
+  }
+
+  const btn     = document.getElementById('mic-btn');
+  const wrapper = document.getElementById('mic-wrapper');
+  btn.classList.remove('active');
+  wrapper.classList.remove('recording');
+  document.body.classList.remove('recording-active');
+  document.getElementById('mic-hint').textContent = 'Hold to speak';
+
+  const liveEl  = document.getElementById('ramble-live');
+  const doneBtn = document.getElementById('ramble-done-btn');
+  if (liveEl)  liveEl.classList.remove('visible');
+  if (doneBtn) doneBtn.classList.remove('visible');
+
+  const liveTransEl = document.getElementById('live-transcript');
+  if (liveTransEl) liveTransEl.textContent = '';
+
+  const raw = rambleTranscript.trim();
+  rambleTranscript = '';
+  if (raw) {
+    const groups = parseBraindump(raw);
+    renderBraindumpCategories(groups);
+    jarvisSpeak(`Breakdown complete. I found ${groups.length} ${groups.length === 1 ? 'category' : 'categories'} from your recording.`);
+  }
+}
+
+function updateRambleWordCount() {
+  const wc = document.getElementById('ramble-word-count');
+  if (wc) {
+    const words = rambleTranscript.trim() ? rambleTranscript.trim().split(/\s+/).length : 0;
+    wc.textContent = words;
+  }
+}
+
+// ── Braindump Parser ───────────────────────────────────────────
+function parseBraindump(transcript) {
+  // Split on natural transition words
+  const transitions = /(?:also|and another thing|oh and|plus|by the way|don't forget|i need to|i should|make sure to|oh i|actually|anyway|so|btw|p\.s\.)(?:\s+)/gi;
+  const sentences = transcript.replace(transitions, '|||').split(/[.!?]+|\|\|\|/).filter(s => s.trim().length > 3);
+
+  const categories = { TASKS: [], WORK: [], ERRANDS: [], PERSONAL: [], IDEAS: [] };
+
+  sentences.forEach(s => {
+    const low = s.toLowerCase();
+    if (/need to|should|have to|must|call|email|text|buy|fix|schedule|book|pay|remind|pick up|sign|submit|send|check/.test(low)) categories.TASKS.push(s.trim());
+    else if (/meeting|project|deadline|report|client|boss|coworker|office|work|job|presentation|invoice|slack/.test(low)) categories.WORK.push(s.trim());
+    else if (/go to|pick up|get some|grocery|groceries|store|pharmacy|doctor|appointment|errand|post office|bank|fill up|tank|car/.test(low)) categories.ERRANDS.push(s.trim());
+    else if (/tell|talk to|ask|check with|mom|dad|kids|friend|partner|wife|husband|family|birthday|dinner|gift/.test(low)) categories.PERSONAL.push(s.trim());
+    else if (/idea|maybe|what if|could|thinking|consider|explore|brainstorm|concept|imagine|vision|startup/.test(low)) categories.IDEAS.push(s.trim());
+    else categories.TASKS.push(s.trim()); // default to TASKS
+  });
+
+  return Object.entries(categories).filter(([k,v]) => v.length).map(([cat, items]) => ({cat, items}));
+}
+
+function renderBraindumpCategories(groups) {
+  const catColors = {
+    TASKS:    '#00e5ff',
+    WORK:     '#7b42bc',
+    ERRANDS:  '#f59e0b',
+    PERSONAL: '#f43f5e',
+    IDEAS:    '#10b981'
+  };
+
+  const list = document.getElementById('blocks-list');
+  const hint = document.getElementById('empty-hint');
+  if (list) list.innerHTML = '';
+  if (hint) hint.style.display = 'none';
+  priorityBlocks = [];
+
+  groups.forEach(({ cat, items }) => {
+    const color = catColors[cat] || '#00e5ff';
+
+    const card = document.createElement('div');
+    card.className = 'braindump-category-card';
+
+    const chip = document.createElement('div');
+    chip.className = 'braindump-category-chip';
+    chip.style.cssText = `background: ${color}22; color: ${color}; border: 1px solid ${color}55;`;
+    chip.textContent = cat;
+    card.appendChild(chip);
+
+    const itemsContainer = document.createElement('div');
+    itemsContainer.className = 'braindump-category-items';
+
+    items.forEach(text => {
+      if (!text) return;
+      const id = 'pb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+      const block = { id, text, minutes: estimateMinutes(text), confidence: 0, confirmed: false };
+      priorityBlocks.push(block);
+
+      const el = createBlockElement(block);
+      itemsContainer.appendChild(el);
+      attachBlockEvents(el, block);
+    });
+
+    card.appendChild(itemsContainer);
+    if (list) list.appendChild(card);
+  });
+
+  updateUI();
+}
+
 function createRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return null;
@@ -1465,6 +1814,12 @@ function setupMicButton() {
 
   function startRec(e) {
     e.preventDefault();
+    // Ramble mode: start continuous recording, don't stop on pointer up
+    if (rambleMode) {
+      if (rambleActive) return; // already recording
+      startRambleRecording();
+      return;
+    }
     if (isRecording) return;
     isRecording       = true;
     pendingTranscript = '';
@@ -1484,6 +1839,8 @@ function setupMicButton() {
 
   function stopRec(e) {
     if (e) e.preventDefault();
+    // In ramble mode, pointer up does NOT stop recording — user must tap Done
+    if (rambleMode) return;
     if (!isRecording) return;
     stopRecording(true);
   }
@@ -2117,6 +2474,9 @@ function openSettingsDrawer() {
   // Hide any previous xAI status message
   const xaiMsg = document.getElementById('xai-status-msg');
   if (xaiMsg) { xaiMsg.style.display = 'none'; xaiMsg.textContent = ''; }
+  // Pre-fill worker URL
+  const workerUrlInput = document.getElementById('worker-url');
+  if (workerUrlInput) workerUrlInput.value = localStorage.getItem('tts_worker_url') || '';
 }
 
 function closeSettingsDrawer() {
@@ -2133,6 +2493,13 @@ function saveSettings() {
     localStorage.removeItem('el_api_key');
   }
   localStorage.setItem('el_voice_id', voiceId);
+  // Save worker URL
+  const workerUrl = (document.getElementById('worker-url').value || '').trim();
+  if (workerUrl) {
+    localStorage.setItem('tts_worker_url', workerUrl);
+  } else {
+    localStorage.removeItem('tts_worker_url');
+  }
   closeSettingsDrawer();
   setJarvisStatus('// settings saved');
 }
