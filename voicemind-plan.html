@@ -1,0 +1,171 @@
+<convos-note
+  eyebrow="PROJECT PLAN"
+  title="VoiceMind Roadmap"
+  dek="Voice-first ADHD productivity — built around one unbreakable law: your audio never leaves your device."
+  tagline="Privacy-first · ADHD · Voice"
+  style="--color-primary: #0a0a0f; --color-accent: #F5C842;">
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PRIVACY-FIRST LAW — most prominent section             -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <div style="
+    background: linear-gradient(135deg, #0d1a2e 0%, #0a0a0f 100%);
+    border: 2px solid #00d4ff;
+    border-radius: 16px;
+    padding: 28px 24px 24px;
+    margin: 0 0 32px;
+    position: relative;
+    overflow: hidden;
+  ">
+    <div style="
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #00d4ff, #F5C842, #00d4ff);
+    "></div>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <span style="font-size: 28px;">🔒</span>
+      <div>
+        <div style="
+          font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+          color: #00d4ff; text-transform: uppercase; margin-bottom: 2px;
+        ">The Privacy-First Law — Non-Negotiable</div>
+        <div style="
+          font-size: 20px; font-weight: 800; color: #ffffff; line-height: 1.2;
+        ">Audio NEVER Leaves Your Device</div>
+      </div>
+    </div>
+
+    <ul style="
+      margin: 0; padding: 0; list-style: none;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    ">
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="color: #00d4ff; font-size: 16px; flex-shrink: 0; margin-top: 1px;">🎙️</span>
+        <span style="color: #c8d8e8; font-size: 14px; line-height: 1.4;">
+          <strong style="color: #ffffff;">No Google APIs</strong> — voice recognition runs locally in your browser via Whisper.js (WebAssembly)
+        </span>
+      </li>
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="color: #00d4ff; font-size: 16px; flex-shrink: 0; margin-top: 1px;">📡</span>
+        <span style="color: #c8d8e8; font-size: 14px; line-height: 1.4;">
+          <strong style="color: #ffffff;">No tracking, no analytics</strong> — zero phoning home, zero telemetry, ever
+        </span>
+      </li>
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="color: #00d4ff; font-size: 16px; flex-shrink: 0; margin-top: 1px;">🔑</span>
+        <span style="color: #c8d8e8; font-size: 14px; line-height: 1.4;">
+          <strong style="color: #ffffff;">Cloud = opt-in only</strong> — xAI, ElevenLabs, OpenAI require YOUR keys, are NEVER defaults
+        </span>
+      </li>
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="color: #00d4ff; font-size: 16px; flex-shrink: 0; margin-top: 1px;">✈️</span>
+        <span style="color: #c8d8e8; font-size: 14px; line-height: 1.4;">
+          <strong style="color: #ffffff;">Fully offline</strong> — works 100% after first load, no internet required for core features
+        </span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- LIVE FEATURES                                          -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <h2 style="
+    color: #F5C842; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
+  ">
+    <span>✅</span> Live Now
+  </h2>
+
+  <convos-card-stack>
+    <convos-card meta="Voice Assistant · Personality" body="JARVIS voice assistant greets you: 'Good morning/afternoon/evening. What do you want, or need to do?' — reads back your actual task, not a generic 'Understood.'">
+      <convos-card-title>JARVIS Personality &amp; TTS</convos-card-title>
+    </convos-card>
+    <convos-card meta="Input · Gestures" body="Hold-to-speak captures voice → floating task blocks. Swipe right to confirm, left to delete. Date: MM/DD/YYYY · Time: 12-hour AM/PM.">
+      <convos-card-title>Voice Capture + Swipe Gestures</convos-card-title>
+    </convos-card>
+    <convos-card meta="UX · Energy" body="Interactive energy bar (Low / Neutral / Charged), schedule analysis panel with time blocks, Confirm All, and individual date+time editing.">
+      <convos-card-title>Energy Picker + Schedule Analysis</convos-card-title>
+    </convos-card>
+    <convos-card meta="Settings · Privacy Badge" body="xAI Grok (Aurora, Rex) and ElevenLabs voice options in Settings. Cloudflare Worker TTS proxy (bypasses CORS). Ramble Mode for brain-dump recording. 100% Private badge displayed.">
+      <convos-card-title>Voice Options + Ramble Mode</convos-card-title>
+    </convos-card>
+  </convos-card-stack>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- IN PROGRESS                                            -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <h2 style="
+    color: #F5C842; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin: 32px 0 14px; display: flex; align-items: center; gap: 8px;
+  ">
+    <span>🔧</span> In Progress
+  </h2>
+
+  <convos-checklist>
+    <convos-check status="todo">
+      Whisper.js local speech recognition — replacing Web Speech API (Google servers) with on-device WebAssembly model
+    </convos-check>
+    <convos-check status="todo">
+      Ramble Mode task breakdown — LLM-powered extraction via Cloudflare Worker + OpenAI (strictly opt-in)
+    </convos-check>
+    <convos-check status="todo">
+      Improved regex fallback parser — noun+verb extraction, split on action-word "and" for multi-task recognition
+    </convos-check>
+  </convos-checklist>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PLANNED ROADMAP                                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <h2 style="
+    color: #F5C842; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin: 32px 0 14px; display: flex; align-items: center; gap: 8px;
+  ">
+    <span>📋</span> Planned Roadmap
+  </h2>
+
+  <convos-roadmap title="VoiceMind Roadmap" meta="Next milestones · privacy-first" color="#F5C842">
+    <convos-milestone status="upcoming" title="Cloudflare Worker Deployment" meta="Target: July 1, 2026">
+      JRex deploys the Cloudflare Worker — enables TTS proxy and optional Ramble Mode task extraction without exposing API keys in the browser.
+    </convos-milestone>
+    <convos-milestone status="upcoming" title="Native App (iOS + Android)" meta="Planned · Phase 2">
+      Fully offline native app — no HTTPS requirement, Whisper.js runs natively, zero cloud dependency for core features. The ultimate privacy guarantee.
+    </convos-milestone>
+    <convos-milestone status="upcoming" title="Record-Your-Own-Voice Reminders" meta="Planned · Phase 2">
+      Record a custom voice clip for task reminders — fully local, your voice stays on your device.
+    </convos-milestone>
+    <convos-milestone status="upcoming" title="Recurring Tasks + Data Export" meta="Planned · Phase 3">
+      Recurring task support and local JSON export — your data, your file, your control.
+    </convos-milestone>
+    <convos-milestone status="upcoming" title="Optional Encrypted Sync" meta="Planned · Phase 3">
+      Zero-knowledge encrypted sync — if you want it, opt in. End-to-end encrypted; VoiceMind never sees your data.
+    </convos-milestone>
+  </convos-roadmap>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- FOOTER NOTE                                            -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <div style="
+    margin-top: 32px;
+    padding: 16px 20px;
+    background: rgba(245, 200, 66, 0.08);
+    border-left: 3px solid #F5C842;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    color: #a0a8b0;
+    line-height: 1.6;
+  ">
+    <strong style="color: #F5C842;">JRex's rule:</strong> Privacy isn't a feature — it's the foundation.
+    Every design decision gets checked against the Privacy-First Law before it ships.
+    Optional cloud features exist to enhance, never to compromise.
+  </div>
+
+</convos-note>
