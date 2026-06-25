@@ -1067,6 +1067,15 @@
   <div id="xai-status-msg" style="margin-top:8px;font-size:12px;color:#ff7f7f;display:none;"></div>
 
   <button class="settings-close-btn" onclick="closeSettingsDrawer()">Close</button>
+
+  <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:16px 0;">
+
+  <div>
+    <div class="settings-label" style="font-weight:600;color:var(--text-primary);">AI Task Parser</div>
+    <input type="password" id="openai-api-key" class="settings-input" placeholder="OpenAI API key (optional)" style="margin-top:8px;">
+    <p style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.5;">Enables smart task extraction from ramble recordings. Requires Cloudflare Worker URL above.</p>
+  </div>
+
 </div>
 
 <!-- Fixed mic section -->
@@ -1656,7 +1665,7 @@ function startRambleRecording() {
   jarvisSpeak('Ramble mode active. Speak freely, tap done when finished.');
 }
 
-function stopRambleRecording() {
+async function stopRambleRecording() {
   rambleActive = false;
   if (rambleRecognition) {
     try { rambleRecognition.stop(); } catch(ex) {}
@@ -1692,7 +1701,7 @@ function stopRambleRecording() {
     );
     raw = raw.replace(/\s{2,}/g, ' ').trim();
 
-    const groups = parseBraindump(raw);
+    const groups = await parseBraindumpWithAI(raw);
     renderBraindumpCategories(groups, raw);
     const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
     jarvisSpeak(`Breakdown complete. I found ${totalItems} ${totalItems === 1 ? 'task' : 'tasks'} from your recording.`);
@@ -1708,6 +1717,35 @@ function updateRambleWordCount(count) {
 }
 
 // ── Braindump Parser ───────────────────────────────────────────
+async function parseBraindumpWithAI(transcript) {
+  const workerUrl = localStorage.getItem('tts_worker_url');
+  const openaiKey = localStorage.getItem('openai_api_key');
+
+  if (workerUrl && openaiKey) {
+    try {
+      const res = await fetch(workerUrl + '/parse', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({transcript, openaiKey})
+      });
+      if (res.ok) {
+        const items = await res.json(); // [{task, category}]
+        const groups = {};
+        items.forEach(({task, category}) => {
+          const cat = category || 'TASKS';
+          if (!groups[cat]) groups[cat] = [];
+          groups[cat].push(task);
+        });
+        return Object.entries(groups).map(([cat, items]) => ({cat, items}));
+      }
+    } catch(e) {
+      console.log('AI parse failed, using regex fallback:', e);
+    }
+  }
+  // Fallback to regex parseBraindump
+  return parseBraindump(transcript);
+}
+
 function parseBraindump(transcript) {
   if (!transcript || !transcript.trim()) return [];
 
@@ -1722,7 +1760,7 @@ function parseBraindump(transcript) {
   const prefixes = /^(?:I need to|I should|I have to|I want to|I gotta|I've gotta|make sure to|don't forget to|remember to|I need|need to|gotta|gonna)\s+/i;
 
   // Step 3: Split on transition signals ONLY
-  const transitions = /(?: and also | also | another thing | oh and | by the way | plus | and then I | oh I also | don't forget | make sure | and I | and we |\band\b(?=\s+(?:I |we |you ))|,\s*(?:I |we ))/gi;
+  const transitions = /(?: and also | also | another thing | oh and | by the way | plus | and then I | oh I also | don't forget | make sure | and I | and we |\band\b(?=\s+(?:I |we |you ))| and (?=(?:go|get|do|call|buy|fix|schedule|email|text|check|figure|pick|make|clean|wash|order|sign|book|pay|remind|finish|complete|update|send|submit|return|cancel)\s)|,\s*(?:I |we ))/gi;
 
   // Split into raw segments
   const segments = t.replace(transitions, ' |SPLIT| ').split('|SPLIT|');
@@ -2661,6 +2699,9 @@ function openSettingsDrawer() {
   // Pre-fill worker URL
   const workerUrlInput = document.getElementById('worker-url');
   if (workerUrlInput) workerUrlInput.value = localStorage.getItem('tts_worker_url') || '';
+  // Pre-fill OpenAI API key
+  const openaiKeyInput = document.getElementById('openai-api-key');
+  if (openaiKeyInput) openaiKeyInput.value = localStorage.getItem('openai_api_key') || '';
 }
 
 function closeSettingsDrawer() {
@@ -2683,6 +2724,13 @@ function saveSettings() {
     localStorage.setItem('tts_worker_url', workerUrl);
   } else {
     localStorage.removeItem('tts_worker_url');
+  }
+  // Save OpenAI API key
+  const openaiKey = (document.getElementById('openai-api-key').value || '').trim();
+  if (openaiKey) {
+    localStorage.setItem('openai_api_key', openaiKey);
+  } else {
+    localStorage.removeItem('openai_api_key');
   }
   closeSettingsDrawer();
   setJarvisStatus('// settings saved');
