@@ -1578,11 +1578,10 @@ function toggleRambleMode() {
 }
 
 function startRambleRecording() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-
   rambleTranscript = '';
   rambleActive = true;
+  document.getElementById('ramble-done-btn').style.display = 'flex';
+  document.getElementById('ramble-live').style.display = 'block';
 
   const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
@@ -1591,49 +1590,70 @@ function startRambleRecording() {
   document.body.classList.add('recording-active');
   document.getElementById('mic-hint').textContent = 'Ramble recording… tap Done when finished';
 
-  const liveEl    = document.getElementById('ramble-live');
-  const doneBtn   = document.getElementById('ramble-done-btn');
-  if (liveEl)  liveEl.classList.add('visible');
-  if (doneBtn) doneBtn.classList.add('visible');
-  updateRambleWordCount();
+  // Use a SEPARATE variable for interim display ONLY - NEVER mixed with final
+  let currentInterim = '';
+  let lastCommittedText = '';
 
-  rambleRecognition = new SR();
-  rambleRecognition.continuous     = true;
-  rambleRecognition.interimResults  = true;
-  rambleRecognition.lang            = 'en-US';
+  function createSession() {
+    const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    rec.continuous = false; // Use NON-continuous to get clean finals
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.lang = 'en-US';
 
-  rambleRecognition.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const result = e.results[i];
-      if (result.isFinal) {
-        const text = result[0].transcript.trim();
-        if (text) rambleTranscript += (rambleTranscript ? ' ' : '') + text;
-        interim = ''; // clear interim on final
-      } else {
-        interim += result[0].transcript; // accumulate interim for display only
+    rec.onresult = (e) => {
+      let interim = '';
+      let finalText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const text = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          finalText += text;
+        } else {
+          interim += text;
+        }
       }
-    }
-    // Show ONLY the current partial sentence being spoken (not the full transcript)
-    const interimEl = document.getElementById('ramble-interim');
-    if (interimEl) interimEl.textContent = interim ? interim : '';
-    updateRambleWordCount();
-  };
+      // Show interim in live display ONLY
+      currentInterim = interim;
+      const display = document.getElementById('ramble-live');
+      if (display) display.textContent = interim || '...';
 
-  rambleRecognition.onerror = (e) => {
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      document.getElementById('https-banner').style.display = 'block';
-      stopRambleRecording();
-    }
-  };
+      // Add to transcript ONLY on final
+      if (finalText.trim()) {
+        // Guard against duplicate: only add if different from last committed
+        const cleaned = finalText.trim();
+        if (cleaned !== lastCommittedText.trim()) {
+          rambleTranscript += (rambleTranscript ? ' ' : '') + cleaned;
+          lastCommittedText = cleaned;
+        }
+        // Update word count
+        const words = rambleTranscript.split(/\s+/).filter(w => w).length;
+        updateRambleWordCount(words);
+      }
+    };
 
-  rambleRecognition.onend = () => {
-    if (rambleActive) {
-      try { rambleRecognition.start(); } catch(ex) {}
-    }
-  };
+    rec.onend = () => {
+      // Auto-restart if ramble still active
+      if (rambleActive) {
+        setTimeout(() => { if (rambleActive) createSession(); }, 100);
+      }
+    };
 
-  try { rambleRecognition.start(); } catch(ex) {}
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        document.getElementById('https-banner').style.display = 'block';
+        rambleActive = false;
+        return;
+      }
+      if (e.error !== 'no-speech' && rambleActive) {
+        setTimeout(() => { if (rambleActive) createSession(); }, 300);
+      }
+    };
+
+    try { rec.start(); rambleRecognition = rec; } catch(err) {}
+  }
+
+  createSession();
+  jarvisSpeak('Ramble mode active. Speak freely, tap done when finished.');
 }
 
 function stopRambleRecording() {
@@ -1679,10 +1699,10 @@ function stopRambleRecording() {
   }
 }
 
-function updateRambleWordCount() {
+function updateRambleWordCount(count) {
   const wc = document.getElementById('ramble-word-count');
   if (wc) {
-    const words = rambleTranscript.trim() ? rambleTranscript.trim().split(/\s+/).length : 0;
+    const words = (count !== undefined) ? count : (rambleTranscript.trim() ? rambleTranscript.trim().split(/\s+/).length : 0);
     wc.textContent = words;
   }
 }
@@ -1691,24 +1711,62 @@ function updateRambleWordCount() {
 function parseBraindump(transcript) {
   if (!transcript || !transcript.trim()) return [];
 
-  // ── Step 1: Normalize text (light contraction expansion for matching) ──
-  let text = transcript
-    .replace(/I'm\b/gi, 'I am')
-    .replace(/I've\b/gi, 'I have')
-    .replace(/I'll\b/gi, 'I will')
-    .replace(/I'd\b/gi, 'I would')
-    .replace(/gotta\b/gi, 'have to')
-    .replace(/gonna\b/gi, 'going to')
-    .replace(/don't/gi, 'do not')
-    .replace(/won't/gi, 'will not')
-    .replace(/can't/gi, 'cannot')
-    .replace(/it's/gi, 'it is')
-    .replace(/let's/gi, 'let us');
+  // Step 1: Aggressive dedup - remove repeated consecutive words/phrases
+  let t = transcript;
+  for (let i = 0; i < 5; i++) {
+    t = t.replace(/(\b[\w]+(?:\s+[\w]+){0,4}\b)(?:\s+\1)+/gi, '$1');
+  }
+  t = t.replace(/\b(\w+)\b(\s+\1\b)+/gi, '$1'); // single word dedup
 
-  // ── Step 2: Split ONLY on clear topic-transition phrases ──────
-  // Do NOT split on every sentence boundary — keep full sentences together.
+  // Step 2: Strip action prefixes (keep what comes AFTER them)
+  const prefixes = /^(?:I need to|I should|I have to|I want to|I gotta|I've gotta|make sure to|don't forget to|remember to|I need|need to|gotta|gonna)\s+/i;
+
+  // Step 3: Split on transition signals ONLY
+  const transitions = /(?: and also | also | another thing | oh and | by the way | plus | and then I | oh I also | don't forget | make sure | and I | and we |\band\b(?=\s+(?:I |we |you ))|,\s*(?:I |we ))/gi;
+
+  // Split into raw segments
+  const segments = t.replace(transitions, ' |SPLIT| ').split('|SPLIT|');
+
+  const categories = { TASKS: [], WORK: [], ERRANDS: [], PERSONAL: [], IDEAS: [] };
+
+  segments.forEach(seg => {
+    // Clean each segment
+    let s = seg.trim();
+    s = s.replace(/^[,;.\s]+|[,;.\s]+$/g, '').trim();
+
+    // Strip leading action prefixes
+    s = s.replace(/^(?:I need to|I should|I have to|I want to|I gotta|I've gotta|make sure to|don't forget to|remember to|I need|need to|gotta|gonna)\s+/i, '');
+    s = s.replace(/^(?:um|uh|so|like|well|okay|ok|actually|basically|right)\s+/i, '');
+
+    if (!s || s.split(/\s+/).length < 2) return; // skip single words
+
+    // Capitalize
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+
+    // Categorize
+    const low = s.toLowerCase();
+    if (/meeting|project|deadline|report|client|boss|presentation|invoice|work|office|job|team|review|proposal|ceu|certification|training/.test(low)) {
+      categories.WORK.push(s);
+    } else if (/grocery|groceries|store|pharmacy|doctor|appointment|bank|gas|dry cleaning|dentist|vet|car|school|pick up|drop off/.test(low)) {
+      categories.ERRANDS.push(s);
+    } else if (/mom|dad|kids|partner|wife|husband|friend|family|birthday|anniversary|gift|dinner|date|tell|ask|call/.test(low) && !/call\s+(?:doctor|dentist|pharmacy)/.test(low)) {
+      categories.PERSONAL.push(s);
+    } else if (/idea|maybe|what if|could|thinking|consider|explore|brainstorm|vision|startup|plan/.test(low)) {
+      categories.IDEAS.push(s);
+    } else {
+      categories.TASKS.push(s);
+    }
+  });
+
+  return Object.entries(categories).filter(([k,v]) => v.length > 0).map(([cat, items]) => ({cat, items}));
+}
+
+// ── Legacy parseBraindump helper stubs (kept for compatibility) ──
+function _parseBraindumpLegacy_unused(transcript) {
+  if (!transcript || !transcript.trim()) return [];
+  let text = transcript;
   const SENTINEL = '\x00SPLIT\x00';
-  const transitions = [
+  const transitions_legacy = [
     'and another thing',
     'another thing',
     'and also',
@@ -1724,7 +1782,7 @@ function parseBraindump(transcript) {
   ];
 
   // Build regex — longer phrases first (already sorted), case-insensitive
-  const escapedPhrases = transitions.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const escapedPhrases = transitions_legacy.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const transRegex = new RegExp(
     '(?:^|\\s)(?:' + escapedPhrases.join('|') + ')(?=\\s)',
     'gi'
