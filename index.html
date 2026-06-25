@@ -566,9 +566,11 @@
     background: rgba(13,14,31,0.85);
     border: 1px solid rgba(0,229,255,0.2);
     border-radius: 12px;
-    padding: 6px 14px;
+    padding: 8px 14px;
     display: none;
-    white-space: nowrap;
+    white-space: normal;
+    max-width: 320px;
+    text-align: center;
   }
   #ramble-live.visible { display: block; }
 
@@ -1084,7 +1086,7 @@
 </div>
 
 <!-- Ramble Mode floating elements -->
-<div id="ramble-live">🎙 Listening… <span id="ramble-word-count">0</span> words</div>
+<div id="ramble-live">🎙 Listening… <span id="ramble-word-count">0</span> words<br><span id="ramble-interim" style="font-size:11px;color:rgba(0,229,255,0.45);font-style:italic;display:block;max-width:280px;word-wrap:break-word;margin-top:3px;"></span></div>
 <button id="ramble-done-btn" onclick="stopRambleRecording()">Done ✦</button>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -1607,17 +1609,14 @@ function startRambleRecording() {
       if (result.isFinal) {
         const text = result[0].transcript.trim();
         if (text) rambleTranscript += (rambleTranscript ? ' ' : '') + text;
-        interim = '';
+        interim = ''; // clear interim on final
       } else {
-        interim += result[0].transcript;
+        interim += result[0].transcript; // accumulate interim for display only
       }
     }
-    const liveTransEl = document.getElementById('live-transcript');
-    if (liveTransEl) {
-      liveTransEl.textContent = rambleTranscript
-        ? (rambleTranscript + (interim ? ' ' + interim : ''))
-        : interim;
-    }
+    // Show ONLY the current partial sentence being spoken (not the full transcript)
+    const interimEl = document.getElementById('ramble-interim');
+    if (interimEl) interimEl.textContent = interim ? interim : '';
     updateRambleWordCount();
   };
 
@@ -1658,13 +1657,25 @@ function stopRambleRecording() {
 
   const liveTransEl = document.getElementById('live-transcript');
   if (liveTransEl) liveTransEl.textContent = '';
+  const interimEl = document.getElementById('ramble-interim');
+  if (interimEl) interimEl.textContent = '';
 
-  const raw = rambleTranscript.trim();
+  let raw = rambleTranscript.trim();
   rambleTranscript = '';
   if (raw) {
+    // ── Dedup pass: remove consecutive repeated words (e.g. "I I need I need to")
+    raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
+    raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
+    // Remove very short orphan fragments (1–2 word segments between longer content)
+    raw = raw.replace(/(?<=[a-z]{3,}\s)(\b\w+(?:\s+\w+)?\b)(?=\s[a-z]{4,})/gi, (m) =>
+      m.split(/\s+/).length <= 2 ? '' : m
+    );
+    raw = raw.replace(/\s{2,}/g, ' ').trim();
+
     const groups = parseBraindump(raw);
     renderBraindumpCategories(groups, raw);
-    jarvisSpeak(`Breakdown complete. I found ${groups.length} ${groups.length === 1 ? 'category' : 'categories'} from your recording.`);
+    const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
+    jarvisSpeak(`Breakdown complete. I found ${totalItems} ${totalItems === 1 ? 'task' : 'tasks'} from your recording.`);
   }
 }
 
@@ -1680,148 +1691,114 @@ function updateRambleWordCount() {
 function parseBraindump(transcript) {
   if (!transcript || !transcript.trim()) return [];
 
-  // ── Step 1: Normalize contractions ────────────────────────────
+  // ── Step 1: Normalize text (light contraction expansion for matching) ──
   let text = transcript
+    .replace(/I'm\b/gi, 'I am')
+    .replace(/I've\b/gi, 'I have')
+    .replace(/I'll\b/gi, 'I will')
+    .replace(/I'd\b/gi, 'I would')
+    .replace(/gotta\b/gi, 'have to')
+    .replace(/gonna\b/gi, 'going to')
     .replace(/don't/gi, 'do not')
     .replace(/won't/gi, 'will not')
     .replace(/can't/gi, 'cannot')
-    .replace(/isn't/gi, 'is not')
-    .replace(/aren't/gi, 'are not')
-    .replace(/wasn't/gi, 'was not')
-    .replace(/weren't/gi, 'were not')
-    .replace(/hasn't/gi, 'has not')
-    .replace(/haven't/gi, 'have not')
-    .replace(/hadn't/gi, 'had not')
-    .replace(/I'm/gi, 'I am')
-    .replace(/I've/gi, 'I have')
-    .replace(/I'll/gi, 'I will')
-    .replace(/I'd/gi, 'I would')
     .replace(/it's/gi, 'it is')
-    .replace(/we're/gi, 'we are')
-    .replace(/they're/gi, 'they are')
-    .replace(/you're/gi, 'you are')
-    .replace(/he's/gi, 'he is')
-    .replace(/she's/gi, 'she is')
-    .replace(/that's/gi, 'that is')
-    .replace(/there's/gi, 'there is')
-    .replace(/let's/gi, 'let us')
-    .replace(/what's/gi, 'what is')
-    .replace(/we've/gi, 'we have')
-    .replace(/they've/gi, 'they have')
-    .replace(/we'll/gi, 'we will')
-    .replace(/they'll/gi, 'they will');
+    .replace(/let's/gi, 'let us');
 
-  // ── Step 2: Trigger-based clause extraction ────────────────────
-  // Ordered so longer/more-specific phrases come first
-  const triggerPhrases = [
+  // ── Step 2: Split ONLY on clear topic-transition phrases ──────
+  // Do NOT split on every sentence boundary — keep full sentences together.
+  const SENTINEL = '\x00SPLIT\x00';
+  const transitions = [
     'and another thing',
-    'make sure to',
-    'do not forget to',
-    'remember to',
-    'by the way',
-    'oh and',
-    'and also',
     'another thing',
-    'I need to',
-    'I have to',
-    'I should',
-    'I want to',
-    'we need to',
-    'have to',
-    'need to',
-    'gotta',
-    'gonna',
-    'also',
+    'and also',
+    'oh I also',
+    'oh and',
+    'by the way',
+    'don\'t forget',
+    'do not forget',
+    'make sure',
+    'and then I',
     'plus',
-    'actually',
+    'also',
   ];
 
-  // Build a regex that matches any trigger phrase (case-insensitive)
-  const escapedPhrases = triggerPhrases.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const triggerRegex = new RegExp(
-    '(?:^|(?<=[.!?\\s]))(' + escapedPhrases.join('|') + ')\\s+',
+  // Build regex — longer phrases first (already sorted), case-insensitive
+  const escapedPhrases = transitions.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const transRegex = new RegExp(
+    '(?:^|\\s)(?:' + escapedPhrases.join('|') + ')(?=\\s)',
     'gi'
   );
 
-  // Insert a sentinel before each trigger match so we can split cleanly
-  const SENTINEL = '\x00SPLIT\x00';
-  const marked = text.replace(triggerRegex, (match, trigger) => SENTINEL + trigger + ' ');
+  const marked = text.replace(transRegex, (match) => {
+    // Keep the transition word(s) with the NEXT segment (drop them entirely — they're just connectors)
+    return SENTINEL;
+  });
 
-  // Split on sentinel OR on sentence-ending punctuation
-  let rawClauses = marked.split(new RegExp(SENTINEL + '|(?<=[.!?])\\s+')).map(s => s.trim()).filter(Boolean);
+  let rawSegments = marked
+    .split(SENTINEL)
+    .map(s => s.trim())
+    .filter(Boolean);
 
-  // ── Step 3: Clean each clause ─────────────────────────────────
-  const fillerStart = /^(?:um+|uh+|so|like|actually|basically|you know|well|right|okay|ok|I mean|I guess)\s+/gi;
-  const fillerEnd   = /\s+(?:um+|uh+|you know|right|okay|ok)$/gi;
+  // Fallback: if no transitions found, treat entire transcript as one segment
+  if (rawSegments.length === 0) rawSegments = [text.trim()];
 
-  function cleanClause(clause) {
-    let c = clause.trim();
-    // Capitalize first letter
-    c = c.charAt(0).toUpperCase() + c.slice(1);
-    // Strip leading fillers (loop to handle stacked fillers)
+  // ── Step 3: Strip action-trigger prefixes from each segment ────
+  const prefixRe = /^(?:I need to|I should|I have to|I want to|I gotta|I have gotta|make sure to|do not forget to|remember to|I am going to|I will|I can|I also need to|I also want to|I also should)\s+/i;
+
+  function cleanSegment(seg) {
+    let c = seg.trim();
+    if (!c) return '';
+
+    // Strip leading filler words
+    c = c.replace(/^(?:um+|uh+|so|like|actually|basically|you know|well|right|okay|ok|I mean|I guess)\s+/gi, '');
+
+    // Strip action-trigger prefix (loop in case of stacked "I need to I want to")
     let prev;
     do {
       prev = c;
-      c = c.replace(fillerStart, '');
-      c = c.charAt(0).toUpperCase() + c.slice(1);
+      c = c.replace(prefixRe, '');
     } while (c !== prev);
-    // Strip trailing fillers
-    c = c.replace(fillerEnd, '').trim();
-    // Remove trailing punctuation oddities but keep real sentence endings
+
+    // Strip trailing filler / punctuation
+    c = c.replace(/\s+(?:um+|uh+|you know|right|okay|ok)$/gi, '');
     c = c.replace(/[,;:]+$/, '').trim();
+
+    // Capitalize first letter
+    if (c.length > 0) c = c.charAt(0).toUpperCase() + c.slice(1);
+
     return c;
   }
 
-  const cleaned = rawClauses
-    .map(cleanClause)
-    .filter(c => c.split(/\s+/).length >= 4); // minimum 4 words
+  const cleaned = rawSegments
+    .map(cleanSegment)
+    .filter(c => {
+      if (!c) return false;
+      const words = c.split(/\s+/).filter(w => w.length > 1); // meaningful words (>1 char)
+      return words.length >= 2; // at least 2 meaningful words
+    });
 
-  // ── Step 4: Fallback – sentence-boundary split ─────────────────
-  // If trigger extraction yielded 0 or 1 clauses, try sentence splitting
-  let clauses = cleaned;
-  if (clauses.length <= 1) {
-    const actionVerbs = /\b(call|email|text|buy|get|pick up|fix|schedule|book|pay|remind|submit|send|finish|clean|wash|order|return|cancel|sign|fill|complete|update|check|go|do|make|take|give|find|write|read|watch|try|ask|tell|show|review|set|turn|bring|pull|push|start|stop|need|have|want|see|put|run|work|plan|use|help|keep|hold|move|build|meet|visit|open|close|add|remove)\b/i;
-    const fallbackClauses = text
-      .split(/[.!?]+/)
-      .map(s => cleanClause(s))
-      .filter(c => c.split(/\s+/).length >= 4 && actionVerbs.test(c));
-    if (fallbackClauses.length > clauses.length) clauses = fallbackClauses;
-  }
-
-  // ── Step 5: Categorize each clause ─────────────────────────────
+  // ── Step 4: Categorize AFTER cleaning ──────────────────────────
   const categories = { TASKS: [], WORK: [], ERRANDS: [], PERSONAL: [], IDEAS: [] };
 
-  clauses.forEach(clause => {
-    const low = clause.toLowerCase();
+  cleaned.forEach(item => {
+    const low = item.toLowerCase();
 
-    // IDEAS first (before TASKS so "could/maybe/idea" don't get swallowed by action-verb match)
     if (/\b(idea|maybe|what if|could|thinking about|consider|explore|brainstorm|concept|vision|startup|pitch|plan)\b/.test(low)) {
-      categories.IDEAS.push(clause);
-    }
-    // WORK
-    else if (/\b(meeting|project|deadline|report|client|boss|presentation|invoice|work|office|job|team|review|proposal|contract|hire|feedback|slack|zoom)\b/.test(low)) {
-      categories.WORK.push(clause);
-    }
-    // ERRANDS
-    else if (/\b(grocery|groceries|store|pharmacy|doctor|appointment|post office|bank|gas|dry cleaning|dentist|vet|car|pickup|pick up|drop off|school)\b/.test(low)) {
-      categories.ERRANDS.push(clause);
-    }
-    // PERSONAL – proper nouns (capital letter mid-sentence) OR relationship words
-    else if (/\b(mom|dad|kids|partner|wife|husband|friend|family|birthday|anniversary|gift|dinner|date|weekend)\b/.test(low)
-             || /(?<!\.\s)\b[A-Z][a-z]{2,}\b/.test(clause)) {
-      categories.PERSONAL.push(clause);
-    }
-    // TASKS – action verbs
-    else if (/\b(call|email|text|buy|get|pick up|fix|schedule|book|pay|remind|submit|send|finish|clean|wash|order|return|cancel|sign|fill|complete|update|check)\b/.test(low)) {
-      categories.TASKS.push(clause);
-    }
-    // Default → TASKS
-    else {
-      categories.TASKS.push(clause);
+      categories.IDEAS.push(item);
+    } else if (/\b(meeting|project|deadline|report|client|boss|presentation|invoice|work|office|job|team|review|proposal|contract|hire|feedback|slack|zoom|email|ceu|certification|license|training)\b/.test(low)) {
+      categories.WORK.push(item);
+    } else if (/\b(grocery|groceries|store|pharmacy|doctor|appointment|post office|bank|gas|dry cleaning|dentist|vet|car|pickup|pick up|drop off|school|errand)\b/.test(low)) {
+      categories.ERRANDS.push(item);
+    } else if (/\b(mom|dad|kids|partner|wife|husband|friend|family|birthday|anniversary|gift|dinner|date|weekend)\b/.test(low)
+               || /(?<!\.\s)\b[A-Z][a-z]{2,}\b/.test(item)) {
+      categories.PERSONAL.push(item);
+    } else {
+      categories.TASKS.push(item);
     }
   });
 
-  return Object.entries(categories).filter(([k,v]) => v.length).map(([cat, items]) => ({cat, items}));
+  return Object.entries(categories).filter(([, v]) => v.length).map(([cat, items]) => ({ cat, items }));
 }
 
 function renderBraindumpCategories(groups, rawTranscript) {
@@ -1839,40 +1816,56 @@ function renderBraindumpCategories(groups, rawTranscript) {
   if (hint) hint.style.display = 'none';
   priorityBlocks = [];
 
-  // ── Fallback: if extraction yielded 0 or 1 items, show full transcript ──
+  // ── Fallback: if extraction yielded 0 items, show full transcript ──
   const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
-  if (totalItems <= 1 && rawTranscript && rawTranscript.trim()) {
+  if (totalItems === 0 && rawTranscript && rawTranscript.trim()) {
     groups = [{ cat: 'TASKS', items: ['JARVIS: transcript captured — tap to edit into tasks\n\n' + rawTranscript.trim()] }];
   }
+
+  // Determine if multiple categories exist — if so, show category headers
+  const multipleCategories = groups.length > 1;
 
   groups.forEach(({ cat, items }) => {
     const color = catColors[cat] || '#00e5ff';
 
-    const card = document.createElement('div');
-    card.className = 'braindump-category-card';
+    if (multipleCategories) {
+      // Wrapped in a category card with chip header
+      const card = document.createElement('div');
+      card.className = 'braindump-category-card';
 
-    const chip = document.createElement('div');
-    chip.className = 'braindump-category-chip';
-    chip.style.cssText = `background: ${color}22; color: ${color}; border: 1px solid ${color}55;`;
-    chip.textContent = cat;
-    card.appendChild(chip);
+      const chip = document.createElement('div');
+      chip.className = 'braindump-category-chip';
+      chip.style.cssText = `background: ${color}22; color: ${color}; border: 1px solid ${color}55;`;
+      chip.textContent = cat;
+      card.appendChild(chip);
 
-    const itemsContainer = document.createElement('div');
-    itemsContainer.className = 'braindump-category-items';
+      const itemsContainer = document.createElement('div');
+      itemsContainer.className = 'braindump-category-items';
 
-    items.forEach(text => {
-      if (!text) return;
-      const id = 'pb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-      const block = { id, text, minutes: estimateMinutes(text), confidence: 0, confirmed: false };
-      priorityBlocks.push(block);
+      items.forEach(text => {
+        if (!text) return;
+        const id = 'pb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const block = { id, text, minutes: estimateMinutes(text), confidence: 0, confirmed: false };
+        priorityBlocks.push(block);
+        const el = createBlockElement(block);
+        itemsContainer.appendChild(el);
+        attachBlockEvents(el, block);
+      });
 
-      const el = createBlockElement(block);
-      itemsContainer.appendChild(el);
-      attachBlockEvents(el, block);
-    });
-
-    card.appendChild(itemsContainer);
-    if (list) list.appendChild(card);
+      card.appendChild(itemsContainer);
+      if (list) list.appendChild(card);
+    } else {
+      // Flat list — no category card wrapper, just show items directly
+      items.forEach(text => {
+        if (!text) return;
+        const id = 'pb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const block = { id, text, minutes: estimateMinutes(text), confidence: 0, confirmed: false };
+        priorityBlocks.push(block);
+        const el = createBlockElement(block);
+        if (list) list.appendChild(el);
+        attachBlockEvents(el, block);
+      });
+    }
   });
 
   updateUI();
