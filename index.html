@@ -947,7 +947,87 @@
     backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
   }
   .settings-overlay.open { display: block; }
+
+  /* ── Whisper Banner ── */
+  #whisper-onboard-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 600;
+    background: linear-gradient(135deg, rgba(13,14,31,0.97), rgba(26,27,65,0.97));
+    border-bottom: 1px solid rgba(0,229,255,0.2);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 0.82rem; color: var(--text-primary); line-height: 1.4;
+  }
+  #whisper-onboard-banner span { flex: 1; }
+  #whisper-onboard-dismiss {
+    background: rgba(0,229,255,0.12); border: 1px solid rgba(0,229,255,0.25);
+    border-radius: 8px; color: #00e5ff; font-size: 0.78rem; font-weight: 600;
+    padding: 6px 14px; cursor: pointer; white-space: nowrap; font-family: inherit;
+    flex-shrink: 0;
+  }
 </style>
+
+<!-- ── Whisper.js: fully local, offline voice recognition ── -->
+<script type="module">
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+env.allowLocalModels = false;
+env.useBrowserCache = true; // Cache model after first download
+
+// Initialize Whisper pipeline (lazy - only on first recording)
+let whisperPipeline = null;
+let whisperReady = false;
+let whisperLoading = false;
+
+async function getWhisper() {
+  if (whisperPipeline) return whisperPipeline;
+  if (whisperLoading) return null;
+  whisperLoading = true;
+
+  // Show loading indicator
+  const hint = document.getElementById('mic-hint');
+  if (hint) hint.textContent = 'Loading voice model… (one-time download ~75MB)';
+
+  try {
+    whisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+      quantized: true, // Smaller/faster
+    });
+    whisperReady = true;
+    whisperLoading = false;
+    localStorage.setItem('whisper_model_loaded', '1');
+    if (hint) hint.textContent = 'Voice model ready. Hold to speak.';
+    return whisperPipeline;
+  } catch(err) {
+    whisperLoading = false;
+    console.error('Whisper load failed:', err);
+    const hint2 = document.getElementById('mic-hint');
+    if (hint2) hint2.textContent = 'Voice model failed to load. Check connection.';
+    return null;
+  }
+}
+window._getWhisper = getWhisper;
+
+async function transcribeAudio(audioBlob) {
+  const whisper = await window._getWhisper();
+  if (!whisper) throw new Error('Whisper not available');
+
+  // Convert blob to Float32Array (required by Whisper.js)
+  const audioBuffer = await audioBlob.arrayBuffer();
+  const audioContext = new AudioContext({ sampleRate: 16000 });
+  const decoded = await audioContext.decodeAudioData(audioBuffer);
+  const float32 = decoded.getChannelData(0);
+
+  const result = await whisper(float32, {
+    language: 'english',
+    task: 'transcribe',
+    chunk_length_s: 30, // Process in 30s chunks for long recordings
+    stride_length_s: 5,
+  });
+
+  return result.text || result;
+}
+window._transcribeAudio = transcribeAudio;
+</script>
+
 </head>
 <body>
 
@@ -956,6 +1036,12 @@
 <div class="bokeh-orb bokeh-blue"></div>
 <div class="bokeh-orb bokeh-gold"></div>
 <div class="bokeh-orb bokeh-deeppurple"></div>
+
+<!-- ── Whisper first-use onboarding banner ── -->
+<div id="whisper-onboard-banner" style="display:none">
+  <span>🔒 First use downloads a 75MB voice model for 100% private, offline transcription. This happens once over WiFi.</span>
+  <button id="whisper-onboard-dismiss" onclick="document.getElementById('whisper-onboard-banner').style.display='none'">Got it</button>
+</div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
 <!--  ENERGY SCREEN                                            -->
@@ -1586,102 +1672,76 @@ function toggleRambleMode() {
   }
 }
 
+// ── Ramble Mode MediaRecorder state ───────────────────────────
+let rambleMediaRecorder = null;
+let rambleAudioChunks   = [];
+
 function startRambleRecording() {
   rambleTranscript = '';
   rambleActive = true;
-  document.getElementById('ramble-done-btn').style.display = 'flex';
-  document.getElementById('ramble-live').style.display = 'block';
+  rambleAudioChunks = [];
 
   const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
   btn.classList.add('active');
   wrapper.classList.add('recording');
   document.body.classList.add('recording-active');
-  document.getElementById('mic-hint').textContent = 'Ramble recording… tap Done when finished';
 
-  // Use a SEPARATE variable for interim display ONLY - NEVER mixed with final
-  let currentInterim = '';
-  let lastCommittedText = '';
+  const liveEl  = document.getElementById('ramble-live');
+  const doneBtn = document.getElementById('ramble-done-btn');
+  if (liveEl)  { liveEl.classList.add('visible');  liveEl.textContent = '🎙 Recording… tap Done when finished'; }
+  if (doneBtn) doneBtn.classList.add('visible');
 
-  function createSession() {
-    const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    rec.continuous = false; // Use NON-continuous to get clean finals
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    rec.lang = 'en-US';
+  const hintEl = document.getElementById('mic-hint');
+  if (hintEl) hintEl.textContent = 'Ramble recording… tap Done when finished';
 
-    rec.onresult = (e) => {
-      let interim = '';
-      let finalText = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const text = e.results[i][0].transcript;
-        if (e.results[i].isFinal) {
-          finalText += text;
-        } else {
-          interim += text;
+  // Request mic and start MediaRecorder
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      rambleMediaRecorder = new MediaRecorder(stream);
+      rambleMediaRecorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) rambleAudioChunks.push(ev.data);
+      };
+      rambleMediaRecorder.start();
+
+      // Show elapsed time in live display
+      let elapsed = 0;
+      rambleMediaRecorder._tickInterval = setInterval(() => {
+        elapsed++;
+        const wc = document.getElementById('ramble-word-count');
+        if (wc) wc.textContent = elapsed + 's';
+        if (liveEl && liveEl.classList.contains('visible')) {
+          liveEl.textContent = `🎙 Recording… ${elapsed}s — tap Done when finished`;
         }
-      }
-      // Show interim in live display ONLY
-      currentInterim = interim;
-      const display = document.getElementById('ramble-live');
-      if (display) display.textContent = interim || '...';
+      }, 1000);
+    })
+    .catch(err => {
+      document.getElementById('https-banner').style.display = 'block';
+      rambleActive = false;
+      btn.classList.remove('active');
+      wrapper.classList.remove('recording');
+      document.body.classList.remove('recording-active');
+      if (liveEl)  liveEl.classList.remove('visible');
+      if (doneBtn) doneBtn.classList.remove('visible');
+    });
 
-      // Add to transcript ONLY on final
-      if (finalText.trim()) {
-        // Guard against duplicate: only add if different from last committed
-        const cleaned = finalText.trim();
-        if (cleaned !== lastCommittedText.trim()) {
-          rambleTranscript += (rambleTranscript ? ' ' : '') + cleaned;
-          lastCommittedText = cleaned;
-        }
-        // Update word count
-        const words = rambleTranscript.split(/\s+/).filter(w => w).length;
-        updateRambleWordCount(words);
-      }
-    };
-
-    rec.onend = () => {
-      // Auto-restart if ramble still active
-      if (rambleActive) {
-        setTimeout(() => { if (rambleActive) createSession(); }, 100);
-      }
-    };
-
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        document.getElementById('https-banner').style.display = 'block';
-        rambleActive = false;
-        return;
-      }
-      if (e.error !== 'no-speech' && rambleActive) {
-        setTimeout(() => { if (rambleActive) createSession(); }, 300);
-      }
-    };
-
-    try { rec.start(); rambleRecognition = rec; } catch(err) {}
-  }
-
-  createSession();
   jarvisSpeak('Ramble mode active. Speak freely, tap done when finished.');
 }
 
 async function stopRambleRecording() {
   rambleActive = false;
-  if (rambleRecognition) {
-    try { rambleRecognition.stop(); } catch(ex) {}
-    rambleRecognition = null;
-  }
 
   const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
   btn.classList.remove('active');
   wrapper.classList.remove('recording');
   document.body.classList.remove('recording-active');
-  document.getElementById('mic-hint').textContent = 'Hold to speak';
+
+  const hintEl = document.getElementById('mic-hint');
+  if (hintEl) hintEl.textContent = 'Hold to speak';
 
   const liveEl  = document.getElementById('ramble-live');
   const doneBtn = document.getElementById('ramble-done-btn');
-  if (liveEl)  liveEl.classList.remove('visible');
   if (doneBtn) doneBtn.classList.remove('visible');
 
   const liveTransEl = document.getElementById('live-transcript');
@@ -1689,22 +1749,62 @@ async function stopRambleRecording() {
   const interimEl = document.getElementById('ramble-interim');
   if (interimEl) interimEl.textContent = '';
 
-  let raw = rambleTranscript.trim();
-  rambleTranscript = '';
-  if (raw) {
-    // ── Dedup pass: remove consecutive repeated words (e.g. "I I need I need to")
-    raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
-    raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
-    // Remove very short orphan fragments (1–2 word segments between longer content)
-    raw = raw.replace(/(?<=[a-z]{3,}\s)(\b\w+(?:\s+\w+)?\b)(?=\s[a-z]{4,})/gi, (m) =>
-      m.split(/\s+/).length <= 2 ? '' : m
-    );
-    raw = raw.replace(/\s{2,}/g, ' ').trim();
+  if (!rambleMediaRecorder) {
+    if (liveEl) liveEl.classList.remove('visible');
+    return;
+  }
 
-    const groups = await parseBraindumpWithAI(raw);
-    renderBraindumpCategories(groups, raw);
-    const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
-    jarvisSpeak(`Breakdown complete. I found ${totalItems} ${totalItems === 1 ? 'task' : 'tasks'} from your recording.`);
+  // Clear elapsed-time ticker
+  if (rambleMediaRecorder._tickInterval) {
+    clearInterval(rambleMediaRecorder._tickInterval);
+  }
+
+  // Update live display to show transcribing state
+  if (liveEl) {
+    liveEl.classList.add('visible');
+    liveEl.textContent = '🔍 Analyzing ramble…';
+  }
+
+  rambleMediaRecorder.onstop = async () => {
+    const blob = new Blob(rambleAudioChunks, { type: 'audio/webm' });
+    rambleAudioChunks = [];
+    // Release mic
+    try { rambleMediaRecorder.stream.getTracks().forEach(t => t.stop()); } catch(ex) {}
+    rambleMediaRecorder = null;
+
+    try {
+      const raw_result = await window._transcribeAudio(blob);
+      let raw = (typeof raw_result === 'string' ? raw_result : (raw_result && raw_result.text) || '').trim();
+
+      if (liveEl) liveEl.classList.remove('visible');
+
+      if (raw) {
+        // Dedup pass: remove consecutive repeated words
+        raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
+        raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
+        raw = raw.replace(/\s{2,}/g, ' ').trim();
+
+        const groups = await parseBraindumpWithAI(raw);
+        renderBraindumpCategories(groups, raw);
+        const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
+        jarvisSpeak(`Breakdown complete. I found ${totalItems} ${totalItems === 1 ? 'task' : 'tasks'} from your recording.`);
+      } else {
+        if (hintEl) hintEl.textContent = 'No speech detected. Try again.';
+        setTimeout(() => { if (hintEl) hintEl.textContent = 'Hold to speak'; }, 3000);
+      }
+    } catch(err) {
+      console.error('Ramble transcription error:', err);
+      if (liveEl) liveEl.classList.remove('visible');
+      if (hintEl) hintEl.textContent = 'Transcription failed. Try again.';
+      setTimeout(() => { if (hintEl) hintEl.textContent = 'Hold to speak'; }, 3000);
+    }
+  };
+
+  try {
+    rambleMediaRecorder.stop();
+  } catch(ex) {
+    rambleMediaRecorder = null;
+    if (liveEl) liveEl.classList.remove('visible');
   }
 }
 
@@ -1968,73 +2068,26 @@ function renderBraindumpCategories(groups, rawTranscript) {
 }
 
 function createRecognition() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return null;
-  const rec = new SR();
-  rec.continuous      = false;
-  rec.interimResults  = true;
-  rec.maxAlternatives = 3;
-  rec.lang            = 'en-US';
-
-  rec.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const result = e.results[i];
-      if (result.isFinal) {
-        // Pick alternative with highest confidence
-        let best = result[0];
-        for (let j = 1; j < result.length; j++) {
-          if (result[j].confidence > best.confidence) best = result[j];
-        }
-        const trimmed = best.transcript.trim();
-        if (trimmed) {
-          pendingTranscript += (pendingTranscript ? ' ' : '') + trimmed;
-          pendingConfidence  = Math.max(pendingConfidence, best.confidence || 0);
-        }
-        interim = '';
-      } else {
-        interim += result[0].transcript;
-      }
-    }
-    const liveEl = document.getElementById('live-transcript');
-    if (liveEl) {
-      liveEl.textContent = pendingTranscript
-        ? (pendingTranscript + (interim ? ' ' + interim : ''))
-        : interim;
-    }
-  };
-
-  rec.onerror = (e) => {
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      document.getElementById('https-banner').style.display = 'block';
-    }
-    // On 'no-speech' or 'aborted' just stop gracefully
-    if (isRecording) stopRecording(false);
-  };
-
-  rec.onend = () => {
-    // If still recording (continuous workaround), restart
-    if (isRecording) {
-      try { rec.start(); } catch(ex) {}
-    }
-  };
-
-  return rec;
+  // REPLACED: Web Speech API removed. Whisper.js handles transcription after recording stops.
+  return null;
 }
 
 // ── Mic Button ───────────────────────────────────────────────
+// MediaRecorder chunks for normal (hold-to-speak) mode
+let normalMediaRecorder = null;
+let normalAudioChunks   = [];
+
 function setupMicButton() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    const b = document.getElementById('https-banner');
-    b.style.display = 'block';
-    b.innerHTML = '⚠️ Your browser does not support the Web Speech API. Use Chrome.';
+  // Show first-use Whisper onboard banner if model not yet cached
+  if (!localStorage.getItem('whisper_model_loaded')) {
+    const banner = document.getElementById('whisper-onboard-banner');
+    if (banner) banner.style.display = 'flex';
   }
 
   const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
 
-  function startRec(e) {
+  async function startRec(e) {
     e.preventDefault();
     // Ramble mode: start continuous recording, don't stop on pointer up
     if (rambleMode) {
@@ -2043,20 +2096,37 @@ function setupMicButton() {
       return;
     }
     if (isRecording) return;
+
+    // Pre-warm Whisper (if first time, shows loading banner)
+    if (window._getWhisper && !localStorage.getItem('whisper_model_loaded')) {
+      // Fire off load in background but don't await — recording starts immediately
+      window._getWhisper().catch(()=>{});
+    }
+
+    // Request mic permission and start MediaRecorder
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch(err) {
+      document.getElementById('https-banner').style.display = 'block';
+      return;
+    }
+
     isRecording       = true;
     pendingTranscript = '';
     pendingConfidence = 0;
+    normalAudioChunks = [];
     document.getElementById('live-transcript').textContent = '';
     document.getElementById('mic-hint').textContent = 'Listening… release when done';
     btn.classList.add('active');
     wrapper.classList.add('recording');
     document.body.classList.add('recording-active');
 
-    // Create FRESH recognition instance each time
-    currentRec = createRecognition();
-    if (currentRec) {
-      try { currentRec.start(); } catch(ex) {}
-    }
+    normalMediaRecorder = new MediaRecorder(stream);
+    normalMediaRecorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) normalAudioChunks.push(ev.data);
+    };
+    normalMediaRecorder.start();
   }
 
   function stopRec(e) {
@@ -2077,35 +2147,86 @@ function setupMicButton() {
 }
 
 function stopRecording(save) {
+  if (!isRecording) return;
   isRecording = false;
   const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
   btn.classList.remove('active');
   wrapper.classList.remove('recording');
   document.body.classList.remove('recording-active');
-  document.getElementById('mic-hint').textContent = 'Hold to speak';
 
+  // Legacy: stop any SpeechRecognition still referenced
   if (currentRec) {
     try { currentRec.stop(); } catch(ex) {}
     currentRec = null;
   }
 
-  const raw = pendingTranscript.trim();
-  if (save && raw) {
-    const cleaned = cleanTranscript(raw);
-    if (cleaned) {
-      const conf = pendingConfidence;
-      addPriorityBlock(cleaned, conf);
-      jarvisSpeak(`${cleaned}`);
+  if (!save || !normalMediaRecorder) {
+    // Discard — stop recorder without transcribing
+    if (normalMediaRecorder) {
+      try { normalMediaRecorder.stream.getTracks().forEach(t => t.stop()); } catch(ex) {}
+      normalMediaRecorder = null;
     }
+    normalAudioChunks = [];
+    document.getElementById('mic-hint').textContent = 'Hold to speak';
+    pendingTranscript = '';
+    pendingConfidence = 0;
+    setTimeout(() => {
+      const lt = document.getElementById('live-transcript');
+      if (lt) lt.textContent = '';
+    }, 600);
+    return;
   }
 
-  pendingTranscript = '';
-  pendingConfidence = 0;
-  setTimeout(() => {
-    const lt = document.getElementById('live-transcript');
-    if (lt) lt.textContent = '';
-  }, 600);
+  // Stop the MediaRecorder and transcribe with Whisper
+  normalMediaRecorder.onstop = async () => {
+    const blob = new Blob(normalAudioChunks, { type: 'audio/webm' });
+    normalAudioChunks = [];
+    // Release mic
+    try { normalMediaRecorder.stream.getTracks().forEach(t => t.stop()); } catch(ex) {}
+    normalMediaRecorder = null;
+
+    const hint = document.getElementById('mic-hint');
+    const liveEl = document.getElementById('live-transcript');
+    if (hint) hint.textContent = 'Transcribing…';
+    if (liveEl) liveEl.textContent = '⌛';
+    btn.disabled = true;
+
+    try {
+      const raw = await window._transcribeAudio(blob);
+      const text = (typeof raw === 'string' ? raw : raw.text || '').trim();
+      if (hint) hint.textContent = 'Hold to speak';
+      if (liveEl) liveEl.textContent = '';
+      btn.disabled = false;
+      if (text) {
+        const cleaned = cleanTranscript(text);
+        if (cleaned) {
+          addPriorityBlock(cleaned, 0);
+          jarvisSpeak(`${cleaned}`);
+        }
+      }
+    } catch(err) {
+      console.error('Whisper transcription error:', err);
+      if (hint) hint.textContent = 'Transcription failed. Try again.';
+      if (liveEl) liveEl.textContent = '';
+      btn.disabled = false;
+    }
+
+    pendingTranscript = '';
+    pendingConfidence = 0;
+    setTimeout(() => {
+      const lt = document.getElementById('live-transcript');
+      if (lt && lt.textContent === '') lt.textContent = '';
+    }, 600);
+  };
+
+  try {
+    normalMediaRecorder.stop();
+  } catch(ex) {
+    normalMediaRecorder = null;
+    document.getElementById('mic-hint').textContent = 'Hold to speak';
+    btn.disabled = false;
+  }
 }
 
 // ── Priority Blocks ───────────────────────────────────────────
