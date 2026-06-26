@@ -1006,26 +1006,70 @@ async function getWhisper() {
 }
 window._getWhisper = getWhisper;
 
-async function transcribeAudio(audioBlob) {
+window._transcribeAudio = async function(blob) {
   const whisper = await window._getWhisper();
-  if (!whisper) throw new Error('Whisper not available');
+  if (!whisper) { console.error('Whisper not available'); return ''; }
 
-  // Convert blob to Float32Array (required by Whisper.js)
-  const audioBuffer = await audioBlob.arrayBuffer();
-  const audioContext = new AudioContext({ sampleRate: 16000 });
-  const decoded = await audioContext.decodeAudioData(audioBuffer);
-  const float32 = decoded.getChannelData(0);
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    console.log('Audio blob size:', blob.size, 'type:', blob.type);
 
-  const result = await whisper(float32, {
-    language: 'english',
-    task: 'transcribe',
-    chunk_length_s: 30, // Process in 30s chunks for long recordings
-    stride_length_s: 5,
-  });
+    // Use a plain AudioContext (browser's native sample rate) to decode
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let decoded;
+    try {
+      decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+    } catch(decodeErr) {
+      console.error('decodeAudioData failed:', decodeErr);
+      audioCtx.close();
+      return '';
+    }
 
-  return result.text || result;
-}
-window._transcribeAudio = transcribeAudio;
+    console.log('Decoded audio duration:', decoded.duration, 's, sampleRate:', decoded.sampleRate, 'channels:', decoded.numberOfChannels);
+
+    // Resample to 16kHz if needed (Brave/Android often records at 48kHz)
+    let float32;
+    if (decoded.sampleRate !== 16000) {
+      const offlineCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offlineCtx.destination);
+      source.start(0);
+      const resampled = await offlineCtx.startRendering();
+      float32 = resampled.getChannelData(0);
+    } else {
+      float32 = decoded.getChannelData(0);
+    }
+
+    audioCtx.close();
+
+    console.log('Float32 array length:', float32.length, '(duration ~', float32.length/16000, 's)');
+
+    if (float32.length < 1600) { // Less than 0.1 seconds
+      console.warn('Audio too short, likely empty');
+      return '';
+    }
+
+    const result = await whisper(float32, {
+      language: 'english',
+      task: 'transcribe',
+      chunk_length_s: 30,
+      stride_length_s: 5,
+    });
+
+    console.log('Whisper raw result:', JSON.stringify(result));
+    const text = typeof result === 'string' ? result
+      : result?.text
+      || result?.chunks?.map(c => c.text).join(' ')
+      || '';
+    console.log('Final transcript:', text);
+    return text.trim();
+
+  } catch(err) {
+    console.error('transcribeAudio error:', err);
+    return '';
+  }
+};
 </script>
 
 </head>
@@ -1696,13 +1740,18 @@ function startRambleRecording() {
   if (hintEl) hintEl.textContent = 'Ramble recording… tap Done when finished';
 
   // Request mic and start MediaRecorder
-  navigator.mediaDevices.getUserMedia({ audio: true })
+  navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true } })
     .then(stream => {
-      rambleMediaRecorder = new MediaRecorder(stream);
+      const options = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? { mimeType: 'audio/webm;codecs=opus' }
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? { mimeType: 'audio/webm' }
+        : {};
+      rambleMediaRecorder = new MediaRecorder(stream, options);
       rambleMediaRecorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) rambleAudioChunks.push(ev.data);
       };
-      rambleMediaRecorder.start();
+      rambleMediaRecorder.start(1000); // collect chunks every 1 second
 
       // Show elapsed time in live display
       let elapsed = 0;
@@ -1809,8 +1858,8 @@ async function stopRambleRecording() {
 
       if (liveEl) liveEl.classList.remove('visible');
 
-      // If transcript is too short, bail out gracefully
-      if (!raw || raw.length < 3) {
+      // If transcript is empty, bail out gracefully
+      if (!raw || raw.trim() === '') {
         jarvisSpeak("I didn't catch that. Try again.");
         if (hintEl) hintEl.textContent = 'No speech detected. Try again.';
         setTimeout(() => { if (hintEl) hintEl.textContent = 'Hold to speak'; }, 3000);
@@ -1901,7 +1950,7 @@ async function parseBraindumpWithAI(transcript) {
 }
 
 function parseBraindump(transcript) {
-  if (!transcript || transcript.trim().length < 3) return [];
+  if (!transcript || !transcript.trim()) return [];
   
   let t = transcript.trim();
   
@@ -2218,11 +2267,16 @@ function setupMicButton() {
     wrapper.classList.add('recording');
     document.body.classList.add('recording-active');
 
-    normalMediaRecorder = new MediaRecorder(stream);
+    const normalOptions = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? { mimeType: 'audio/webm;codecs=opus' }
+      : MediaRecorder.isTypeSupported('audio/webm')
+      ? { mimeType: 'audio/webm' }
+      : {};
+    normalMediaRecorder = new MediaRecorder(stream, normalOptions);
     normalMediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) normalAudioChunks.push(ev.data);
     };
-    normalMediaRecorder.start();
+    normalMediaRecorder.start(500); // collect chunks every 500ms for responsiveness
   }
 
   function stopRec(e) {
