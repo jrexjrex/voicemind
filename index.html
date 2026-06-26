@@ -1847,56 +1847,98 @@ async function parseBraindumpWithAI(transcript) {
 }
 
 function parseBraindump(transcript) {
-  if (!transcript || !transcript.trim()) return [];
-
-  // Step 1: Aggressive dedup - remove repeated consecutive words/phrases
-  let t = transcript;
-  for (let i = 0; i < 5; i++) {
-    t = t.replace(/(\b[\w]+(?:\s+[\w]+){0,4}\b)(?:\s+\1)+/gi, '$1');
-  }
-  t = t.replace(/\b(\w+)\b(\s+\1\b)+/gi, '$1'); // single word dedup
-
-  // Step 2: Strip action prefixes (keep what comes AFTER them)
-  const prefixes = /^(?:I need to|I should|I have to|I want to|I gotta|I've gotta|make sure to|don't forget to|remember to|I need|need to|gotta|gonna)\s+/i;
-
-  // Step 3: Split on transition signals ONLY
-  const transitions = /(?: and also | also | another thing | oh and | by the way | plus | and then I | oh I also | don't forget | make sure | and I | and we |\band\b(?=\s+(?:I |we |you ))| and (?=(?:go|get|do|call|buy|fix|schedule|email|text|check|figure|pick|make|clean|wash|order|sign|book|pay|remind|finish|complete|update|send|submit|return|cancel)\s)|,\s*(?:I |we ))/gi;
-
-  // Split into raw segments
-  const segments = t.replace(transitions, ' |SPLIT| ').split('|SPLIT|');
-
-  const categories = { TASKS: [], WORK: [], ERRANDS: [], PERSONAL: [], IDEAS: [] };
-
+  if (!transcript || transcript.trim().length < 3) return [];
+  
+  let t = transcript.trim();
+  
+  // Step 1: Normalize — remove filler words
+  t = t.replace(/\b(um|uh|like|you know|basically|literally|actually|so|well|okay|ok|right)\b,?\s*/gi, ' ');
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  
+  // Step 2: Split into task units using MULTIPLE strategies
+  // Strategy A: Explicit transition words
+  const transitionSplit = /\s+(?:and also|also|another thing|oh and|by the way|plus|don't forget|make sure|and then|oh I|and I need|and I should|and I want|and I gotta)\s+/gi;
+  
+  // Strategy B: "and" followed directly by an action verb (verb-boundary detection)
+  // This catches "go to the gym and do my CEUs and figure out refi"
+  const verbBoundary = /\s+and\s+(?=(?:go|get|do|call|buy|fix|schedule|email|text|check|figure|pick|make|clean|wash|order|sign|book|pay|remind|finish|complete|update|send|submit|return|cancel|tell|ask|take|bring|find|look|try|open|close|review|set|read|write|create|start|stop|add|remove|delete|edit|save|share|post|apply|register|install|download|upload|print|file|fill|renew|cancel|confirm|check)\s)/gi;
+  
+  // Strategy C: After stripping trigger phrases, detect consecutive verb phrases
+  // e.g. "Open the gym Refi Do CEUs" → split before "Refi" and "Do"
+  // Look for: [word ending a phrase] [Capitalized verb or known action noun at start of next phrase]
+  // Pattern: non-verb word sequence followed by a known action word
+  const actionVerbs = /\b(go|get|do|call|buy|fix|schedule|email|text|check|figure|pick|make|clean|wash|order|sign|book|pay|remind|finish|complete|update|send|submit|return|cancel|tell|ask|take|bring|find|look|try|open|close|review|set|read|write|create|start|stop|add|remove|delete|edit|save|share|post|apply|register|install|download|upload|print|file|fill|renew|cancel|confirm)\b/gi;
+  
+  // Apply transition word splits first
+  let segments = t.split(transitionSplit).flatMap(seg => seg.split(verbBoundary));
+  
+  // Strategy D: For remaining long segments that contain multiple action verbs,
+  // split on verb boundaries within the segment
+  const finalSegments = [];
   segments.forEach(seg => {
-    // Clean each segment
-    let s = seg.trim();
-    s = s.replace(/^[,;.\s]+|[,;.\s]+$/g, '').trim();
-
-    // Strip leading action prefixes
-    s = s.replace(/^(?:I need to|I should|I have to|I want to|I gotta|I've gotta|make sure to|don't forget to|remember to|I need|need to|gotta|gonna)\s+/i, '');
-    s = s.replace(/^(?:um|uh|so|like|well|okay|ok|actually|basically|right)\s+/i, '');
-
-    if (!s || s.split(/\s+/).length < 2) return; // skip single words
-
-    // Capitalize
-    s = s.charAt(0).toUpperCase() + s.slice(1);
-
-    // Categorize
-    const low = s.toLowerCase();
-    if (/meeting|project|deadline|report|client|boss|presentation|invoice|work|office|job|team|review|proposal|ceu|certification|training/.test(low)) {
-      categories.WORK.push(s);
-    } else if (/grocery|groceries|store|pharmacy|doctor|appointment|bank|gas|dry cleaning|dentist|vet|car|school|pick up|drop off/.test(low)) {
-      categories.ERRANDS.push(s);
-    } else if (/mom|dad|kids|partner|wife|husband|friend|family|birthday|anniversary|gift|dinner|date|tell|ask|call/.test(low) && !/call\s+(?:doctor|dentist|pharmacy)/.test(low)) {
-      categories.PERSONAL.push(s);
-    } else if (/idea|maybe|what if|could|thinking|consider|explore|brainstorm|vision|startup|plan/.test(low)) {
-      categories.IDEAS.push(s);
+    seg = seg.trim();
+    if (!seg) return;
+    
+    // Find all action verbs in this segment
+    const verbMatches = [];
+    let m;
+    const verbRe = /\b(go to|get|do|call|buy|fix|schedule|email|text|check out|figure out|pick up|make|clean|wash|order|sign up|book|pay|remind|finish|complete|update|send|submit|return|cancel|tell|ask|take|bring|find|look up|try|open|close|review|set up|read|write|create|start|stop|add|remove|delete|edit|save|share|post|apply|register|install|download|upload|print|file|fill out|renew)\b/gi;
+    while ((m = verbRe.exec(seg)) !== null) {
+      verbMatches.push({ index: m.index, verb: m[0] });
+    }
+    
+    if (verbMatches.length <= 1) {
+      // 0 or 1 verb — keep as one segment
+      finalSegments.push(seg);
     } else {
-      categories.TASKS.push(s);
+      // Multiple verbs — split before each verb occurrence (except the first)
+      let lastIdx = 0;
+      for (let i = 1; i < verbMatches.length; i++) {
+        const splitIdx = verbMatches[i].index;
+        // Only split if there's a meaningful chunk before this verb
+        const before = seg.slice(lastIdx, splitIdx).trim();
+        const wordsBefore = before.split(/\s+/).filter(w => w.length > 1);
+        if (wordsBefore.length >= 1) {
+          finalSegments.push(before);
+          lastIdx = splitIdx;
+        }
+      }
+      finalSegments.push(seg.slice(lastIdx).trim());
     }
   });
-
-  return Object.entries(categories).filter(([k,v]) => v.length > 0).map(([cat, items]) => ({cat, items}));
+  
+  // Step 3: Clean each segment and categorize
+  const cats = { TASKS: [], WORK: [], ERRANDS: [], PERSONAL: [], IDEAS: [] };
+  
+  finalSegments.forEach(seg => {
+    let s = seg.trim();
+    if (!s) return;
+    
+    // Strip leading trigger phrases
+    s = s.replace(/^(?:I need to|I should|I have to|I want to|I gotta|I've gotta|need to|gotta|gonna|I'll|let me|I will)\s+/i, '');
+    s = s.replace(/^(?:um|uh|so|like|well|okay|ok|actually|basically|right)\s+/i, '');
+    s = s.replace(/[.,;!?]+$/, '').trim(); // remove trailing punctuation
+    
+    if (!s || s.split(/\s+/).length < 2) return; // skip fragments
+    
+    // Capitalize first word
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+    
+    const low = s.toLowerCase();
+    if (/meeting|project|deadline|report|client|boss|presentation|ceu|ceus|certification|training|work|office|job|invoice|refi|refinance|mortgage/.test(low)) {
+      cats.WORK.push(s);
+    } else if (/grocery|groceries|store|pharmacy|doctor|appointment|bank|gas|dentist|vet|car|school|gym|pick up|drop off/.test(low)) {
+      cats.ERRANDS.push(s);
+    } else if (/mom|dad|kids|partner|wife|husband|friend|family|birthday|gift|dinner|date/.test(low)) {
+      cats.PERSONAL.push(s);
+    } else if (/idea|maybe|what if|could|thinking|consider|explore|brainstorm|vision|startup/.test(low)) {
+      cats.IDEAS.push(s);
+    } else {
+      cats.TASKS.push(s);
+    }
+  });
+  
+  return Object.entries(cats).filter(([,v]) => v.length > 0).map(([cat, items]) => ({cat, items}));
 }
 
 // ── Legacy parseBraindump helper stubs (kept for compatibility) ──
