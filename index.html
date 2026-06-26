@@ -1772,31 +1772,85 @@ async function stopRambleRecording() {
     try { rambleMediaRecorder.stream.getTracks().forEach(t => t.stop()); } catch(ex) {}
     rambleMediaRecorder = null;
 
+    // Helper: ensure app is in a clean, visible state after ramble
+    function _restoreMainView() {
+      if (liveEl) liveEl.classList.remove('visible');
+      if (doneBtn) doneBtn.classList.remove('visible');
+      // Ensure priority-area is visible and not obscured
+      const priorityArea = document.getElementById('priority-area');
+      if (priorityArea) priorityArea.style.display = '';
+      updateUI();
+    }
+
+    // Helper: show a transient error toast
+    function _showRambleError(msg) {
+      let toast = document.getElementById('ramble-error-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'ramble-error-toast';
+        toast.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,0.92);color:#fff;padding:12px 22px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      clearTimeout(toast._hideTimer);
+      toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, 4000);
+    }
+
     try {
       const raw_result = await window._transcribeAudio(blob);
-      let raw = (typeof raw_result === 'string' ? raw_result : (raw_result && raw_result.text) || '').trim();
+      console.log('Whisper result:', raw_result);
+
+      // Robustly extract transcript string from any Whisper.js return shape
+      let raw = typeof raw_result === 'string'
+        ? raw_result
+        : (raw_result?.text || raw_result?.chunks?.map(c => c.text).join(' ') || '');
+      raw = raw.trim();
 
       if (liveEl) liveEl.classList.remove('visible');
 
-      if (raw) {
-        // Dedup pass: remove consecutive repeated words
-        raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
-        raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
-        raw = raw.replace(/\s{2,}/g, ' ').trim();
-
-        const groups = await parseBraindumpWithAI(raw);
-        renderBraindumpCategories(groups, raw);
-        const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
-        jarvisSpeak(`Breakdown complete. I found ${totalItems} ${totalItems === 1 ? 'task' : 'tasks'} from your recording.`);
-      } else {
+      // If transcript is too short, bail out gracefully
+      if (!raw || raw.length < 3) {
+        jarvisSpeak("I didn't catch that. Try again.");
         if (hintEl) hintEl.textContent = 'No speech detected. Try again.';
         setTimeout(() => { if (hintEl) hintEl.textContent = 'Hold to speak'; }, 3000);
+        _restoreMainView();
+        return;
       }
+
+      // Dedup pass: remove consecutive repeated words
+      raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
+      raw = raw.replace(/(\b\w+\b)(?:\s+\1)+/gi, '$1');
+      raw = raw.replace(/\s{2,}/g, ' ').trim();
+
+      let groups;
+      try {
+        groups = await parseBraindumpWithAI(raw);
+      } catch(parseErr) {
+        console.error('parseBraindumpWithAI error:', parseErr);
+        groups = [];
+      }
+
+      // Fallback: if parseBraindump yielded nothing, show full transcript as one TASKS card
+      const totalItems = groups.reduce((sum, g) => sum + g.items.length, 0);
+      if (groups.length === 0 || totalItems === 0) {
+        groups = [{ cat: 'TASKS', items: [raw] }];
+      }
+
+      renderBraindumpCategories(groups, raw);
+
+      // Ensure the main view is visible and properly transitioned back
+      _restoreMainView();
+
+      const finalCount = groups.reduce((sum, g) => sum + g.items.length, 0);
+      jarvisSpeak(`Breakdown complete. I found ${finalCount} ${finalCount === 1 ? 'task' : 'tasks'} from your recording.`);
     } catch(err) {
       console.error('Ramble transcription error:', err);
       if (liveEl) liveEl.classList.remove('visible');
       if (hintEl) hintEl.textContent = 'Transcription failed. Try again.';
       setTimeout(() => { if (hintEl) hintEl.textContent = 'Hold to speak'; }, 3000);
+      _showRambleError('Transcription failed — tap mic to try again');
+      _restoreMainView();
     }
   };
 
