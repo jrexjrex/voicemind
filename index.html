@@ -1795,7 +1795,12 @@ function startRambleRecording() {
 
 function stopRambleRecording() {
   rambleActive = false;
-  if (rambleRecognition) { try { rambleRecognition.stop(); } catch(e){} rambleRecognition = null; }
+  // FIX: null out rambleRecognition reference BEFORE stopping, so the
+  // onresult/onend callbacks (which fire asynchronously after .stop()) still
+  // write to rambleTranscript but no longer trigger a new createSession().
+  const recToStop = rambleRecognition;
+  rambleRecognition = null;
+  if (recToStop) { try { recToStop.stop(); } catch(e){} }
 
   const btn     = document.getElementById('mic-btn');
   const wrapper = document.getElementById('mic-wrapper');
@@ -1812,47 +1817,73 @@ function stopRambleRecording() {
 
   if (liveEl) { liveEl.classList.add('visible'); liveEl.textContent = '🔍 Analyzing...'; }
 
-  const transcript = rambleTranscript.trim();
-  console.log('Ramble transcript:', transcript);
+  // FIX: Delay reading rambleTranscript by 600 ms so any in-flight onresult
+  // callback (fired asynchronously by the browser AFTER .stop()) has time to
+  // append its final text before we snapshot the value.
+  setTimeout(() => {
+    const transcript = rambleTranscript.trim();
+    console.log('Ramble transcript:', transcript);
 
-  if (!transcript) {
-    if (window.jarvisSpeak) jarvisSpeak("I didn't catch that. Try again.");
-    if (liveEl) liveEl.classList.remove('visible');
-    // Restore main view
-    const priorityArea = document.getElementById('priority-area');
-    if (priorityArea) priorityArea.style.display = '';
-    updateUI();
-    return;
-  }
+    // DEBUG: show raw transcript in green overlay for 8 s
+    const debugDiv = document.getElementById('ramble-debug') || (() => {
+      const d = document.createElement('div');
+      d.id = 'ramble-debug';
+      d.style.cssText = 'position:fixed; top:10px; left:10px; right:10px; background:rgba(0,0,0,0.9); color:#0f0; font-size:12px; padding:10px; border-radius:8px; z-index:9999; max-height:200px; overflow:auto; white-space:pre-wrap; word-break:break-all;';
+      document.body.appendChild(d);
+      return d;
+    })();
 
-  // Parse into tasks (async AI parse with sync regex fallback)
-  parseBraindumpWithAI(transcript).then(groups => {
-    console.log('Parsed groups:', groups);
+    if (!transcript) {
+      debugDiv.textContent = 'TRANSCRIPT: (empty — no speech captured)';
+      debugDiv.style.display = 'block';
+      setTimeout(() => { debugDiv.style.display = 'none'; }, 8000);
 
-    if (liveEl) liveEl.classList.remove('visible');
-
-    // Render results
-    renderBraindumpCategories(groups, transcript);
-
-    // Restore main view
-    const priorityArea = document.getElementById('priority-area');
-    if (priorityArea) priorityArea.style.display = '';
-    updateUI();
-
-    if (window.jarvisSpeak) {
-      const totalTasks = groups.reduce((sum, g) => sum + g.items.length, 0);
-      jarvisSpeak(`Breakdown complete. I found ${totalTasks} task${totalTasks !== 1 ? 's' : ''} from your recording.`);
+      if (window.jarvisSpeak) jarvisSpeak("I didn't catch that. Try again.");
+      if (liveEl) liveEl.classList.remove('visible');
+      // Restore main view
+      const priorityArea = document.getElementById('priority-area');
+      if (priorityArea) priorityArea.style.display = '';
+      updateUI();
+      return;
     }
-  }).catch(err => {
-    console.error('parseBraindumpWithAI error:', err);
-    // Fallback: show transcript as one task
-    const groups = [{ cat: 'TASKS', items: [transcript] }];
-    renderBraindumpCategories(groups, transcript);
-    if (liveEl) liveEl.classList.remove('visible');
-    const priorityArea = document.getElementById('priority-area');
-    if (priorityArea) priorityArea.style.display = '';
-    updateUI();
-  });
+
+    // Parse into tasks (async AI parse with sync regex fallback)
+    parseBraindumpWithAI(transcript).then(groups => {
+      console.log('Parsed groups:', groups);
+
+      // DEBUG: show transcript + parsed groups
+      debugDiv.textContent = 'TRANSCRIPT: ' + transcript + '\n\nGROUPS: ' + JSON.stringify(groups, null, 2);
+      debugDiv.style.display = 'block';
+      setTimeout(() => { debugDiv.style.display = 'none'; }, 8000);
+
+      if (liveEl) liveEl.classList.remove('visible');
+
+      // Render results
+      renderBraindumpCategories(groups, transcript);
+
+      // Restore main view
+      const priorityArea = document.getElementById('priority-area');
+      if (priorityArea) priorityArea.style.display = '';
+      updateUI();
+
+      if (window.jarvisSpeak) {
+        const totalTasks = groups.reduce((sum, g) => sum + g.items.length, 0);
+        jarvisSpeak(`Breakdown complete. I found ${totalTasks} task${totalTasks !== 1 ? 's' : ''} from your recording.`);
+      }
+    }).catch(err => {
+      console.error('parseBraindumpWithAI error:', err);
+      debugDiv.textContent = 'TRANSCRIPT: ' + transcript + '\n\nPARSE ERROR: ' + err;
+      debugDiv.style.display = 'block';
+      setTimeout(() => { debugDiv.style.display = 'none'; }, 8000);
+      // Fallback: show transcript as one task
+      const groups = [{ cat: 'TASKS', items: [transcript] }];
+      renderBraindumpCategories(groups, transcript);
+      if (liveEl) liveEl.classList.remove('visible');
+      const priorityArea = document.getElementById('priority-area');
+      if (priorityArea) priorityArea.style.display = '';
+      updateUI();
+    });
+  }, 600); // 600 ms grace period for final onresult to fire
 }
 
 function updateRambleWordCount(count) {
